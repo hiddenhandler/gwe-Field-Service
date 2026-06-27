@@ -27,7 +27,6 @@ export const useAuth = create((set, get) => ({
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // Fetch profile immediately after sign in
     if (data.user) await get().fetchProfile(data.user)
     return data
   },

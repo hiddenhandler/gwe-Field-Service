@@ -2,11 +2,10 @@ const go = async e => {
   e.preventDefault(); setBusy(true); setErr('')
   try {
     await signIn(email, pass)
-    // Profile is already fetched inside signIn now — read it directly
     const p = useAuth.getState().profile
     nav(p?.role === 'manager' ? '/manager' : '/field', { replace: true })
-  } catch (e) { 
+  } catch (e) {
     setErr(e.message || 'Login failed')
-    setBusy(false) 
+    setBusy(false)
   }
 }
