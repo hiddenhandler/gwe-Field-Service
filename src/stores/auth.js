@@ -1,9 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
-
 export const useAuth = create((set, get) => ({
   user: null, profile: null, loading: true,
-
   init: async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) await get().fetchProfile(session.user)
@@ -13,26 +11,15 @@ export const useAuth = create((set, get) => ({
       else set({ user: null, profile: null })
     })
   },
-
   fetchProfile: async u => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', u.id)
-      .single()
-    if (error) console.error('fetchProfile error:', error)
+    const { data } = await supabase.from('profiles').select('*').eq('id', u.id).single()
     set({ user: u, profile: data })
   },
-
   signIn: async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    if (data.user) await get().fetchProfile(data.user)
-    return data
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) await get().fetchProfile(user)
   },
-
-  signOut: async () => {
-    await supabase.auth.signOut()
-    set({ user: null, profile: null })
-  },
+  signOut: async () => { await supabase.auth.signOut(); set({ user: null, profile: null }) },
 }))
