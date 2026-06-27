@@ -1,9 +1,14 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+<<<<<<< Updated upstream
 
 export const useAuth = create((set, get) => ({
   user: null, profile: null, loading: true,
 
+=======
+export const useAuth = create((set, get) => ({
+  user: null, profile: null, loading: true,
+>>>>>>> Stashed changes
   init: async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) await get().fetchProfile(session.user)
@@ -13,6 +18,7 @@ export const useAuth = create((set, get) => ({
       else set({ user: null, profile: null })
     })
   },
+<<<<<<< Updated upstream
 
   fetchProfile: async u => {
     const { data, error } = await supabase
@@ -37,3 +43,15 @@ export const useAuth = create((set, get) => ({
     set({ user: null, profile: null })
   },
 }))
+=======
+  fetchProfile: async u => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', u.id).single()
+    set({ user: u, profile: data })
+  },
+  signIn: async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error; return data
+  },
+  signOut: async () => { await supabase.auth.signOut(); set({ user: null, profile: null }) },
+}))
+>>>>>>> Stashed changes
