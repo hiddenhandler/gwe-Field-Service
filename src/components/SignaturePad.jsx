@@ -15,7 +15,9 @@ export default function SignaturePad({ onSave, height = 160 }) {
     c.height = rect.height * dpr
     const ctx = c.getContext('2d')
     ctx.scale(dpr, dpr)
-    ctx.strokeStyle = '#e8f0e9'
+    ctx.fillStyle = '#F4F4F5'
+    ctx.fillRect(0, 0, rect.width, rect.height)
+    ctx.strokeStyle = '#111'
     ctx.lineWidth = 2.5
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
@@ -60,7 +62,11 @@ export default function SignaturePad({ onSave, height = 160 }) {
     const c = canvasRef.current
     const ctx = c.getContext('2d')
     const dpr = window.devicePixelRatio || 1
-    ctx.clearRect(0, 0, c.width / dpr, c.height / dpr)
+    const w = c.width / dpr
+    const h = c.height / dpr
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = '#F4F4F5'
+    ctx.fillRect(0, 0, w, h)
     setHasStrokes(false)
     if (onSave) onSave(null)
   }
