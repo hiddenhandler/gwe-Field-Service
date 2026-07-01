@@ -8,6 +8,7 @@ export default function Login() {
   const [pass, setPass] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [logoOk, setLogoOk] = useState(true)
   const { signIn } = useAuth()
   const nav = useNavigate()
 
@@ -28,7 +29,9 @@ export default function Login() {
   return (
     <div className="login-bg">
       <div className="login-box">
-        <div className="login-logo">GW</div>
+        {logoOk
+          ? <img src="/logo.png" alt="Great Way Environmental" className="login-logo-img" onError={() => setLogoOk(false)} />
+          : <div className="login-logo">GW</div>}
         <h1 style={{ fontSize: 22, fontWeight: 800, textAlign: 'center' }}>Great Way Environmental</h1>
         <p style={{ fontSize: 13, color: 'var(--t3)', textAlign: 'center', margin: '6px 0 28px' }}>Field Service — Crew Management</p>
         <form onSubmit={go} className="fg">

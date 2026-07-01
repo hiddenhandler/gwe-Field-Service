@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
-import { supabase } from '../lib/supabase'
+import { supabase, createUserAccount } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
@@ -70,13 +70,31 @@ function CalendarView() {
   const [selDay, setSelDay] = useState(null)
   const [dayVisits, setDayVisits] = useState([])
   const [daySched, setDaySched] = useState([])
+  const [locs, setLocs] = useState([])
+  const [addJob, setAddJob] = useState(false), [savingJob, setSavingJob] = useState(false)
+  const jobBlank = { service_date: format(new Date(), 'yyyy-MM-dd'), service_type: 'Landscaping', location_name: '', subcontractor: '', status: 'scheduled' }
+  const [job, setJob] = useState(jobBlank)
+
+  const loadSched = useCallback(async () => {
+    const sd = format(startOfMonth(month), 'yyyy-MM-dd'), ed = format(endOfMonth(month), 'yyyy-MM-dd')
+    const { data } = await supabase.from('schedule').select('*').gte('service_date', sd).lte('service_date', ed).order('service_date')
+    setSched(data || [])
+  }, [month])
 
   useEffect(() => {
     const s = startOfMonth(month).toISOString(), e = endOfMonth(month).toISOString()
     supabase.from('visits').select('*, profiles(full_name), locations(name, city)').gte('check_in_at', s).lte('check_in_at', e).order('check_in_at').then(({ data }) => setVisits(data || []))
-    const sd = format(startOfMonth(month), 'yyyy-MM-dd'), ed = format(endOfMonth(month), 'yyyy-MM-dd')
-    supabase.from('schedule').select('*').gte('service_date', sd).lte('service_date', ed).order('service_date').then(({ data }) => setSched(data || []))
-  }, [month])
+    loadSched()
+  }, [month, loadSched])
+
+  useEffect(() => { supabase.from('locations').select('name').eq('active', true).order('name').then(({ data }) => setLocs(data || [])) }, [])
+
+  const saveJob = async e => {
+    e.preventDefault(); setSavingJob(true)
+    await supabase.from('schedule').insert(job)
+    setJob(jobBlank); setAddJob(false); setSavingJob(false)
+    await loadSched()
+  }
 
   const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) })
   const firstDow = getDay(startOfMonth(month))
@@ -96,11 +114,30 @@ function CalendarView() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Calendar</h1>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className="btn btn-p btn-sm" onClick={() => setAddJob(!addJob)} style={{ marginRight: 6 }}>{addJob ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Job</>}</button>
           <button className="btn btn-g btn-sm" onClick={() => setMonth(subMonths(month, 1))}><ChevronLeft size={14} /></button>
           <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textAlign: 'center' }}>{format(month, 'MMMM yyyy')}</span>
           <button className="btn btn-g btn-sm" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight size={14} /></button>
         </div>
       </div>
+      {addJob && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14 }}>New Scheduled Job</div>
+          <form onSubmit={saveJob}>
+            <div className="fg2" style={{ marginBottom: 14 }}>
+              <div className="field"><label className="field-lbl">Date</label><input className="inp" type="date" value={job.service_date} onChange={e => setJob({ ...job, service_date: e.target.value })} required /></div>
+              <div className="field"><label className="field-lbl">Location</label>
+                <input className="inp" list="loc-list" placeholder="Type or pick a location" value={job.location_name} onChange={e => setJob({ ...job, location_name: e.target.value })} required />
+                <datalist id="loc-list">{locs.map(l => <option key={l.name} value={l.name} />)}</datalist>
+              </div>
+              <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={job.service_type} onChange={e => setJob({ ...job, service_type: e.target.value })}><option>Landscaping</option><option>Janitorial</option></select></div>
+              <div className="field"><label className="field-lbl">Subcontractor</label><input className="inp" placeholder="e.g. Freddi" value={job.subcontractor} onChange={e => setJob({ ...job, subcontractor: e.target.value })} /></div>
+              <div className="field"><label className="field-lbl">Status</label><select className="inp" value={job.status} onChange={e => setJob({ ...job, status: e.target.value })}><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></div>
+            </div>
+            <button className="btn btn-p" type="submit" disabled={savingJob}>{savingJob ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Add to Calendar'}</button>
+          </form>
+        </div>
+      )}
       <div className="card" style={{ padding: 12, marginBottom: 16 }}>
         <div className="cal-grid">
           {dows.map(d => <div key={d} className="cal-hdr">{d}</div>)}
@@ -232,51 +269,81 @@ function AllVisits() {
 /* ═══ LOCATIONS ═══ */
 function Locations() {
   const [locs, setLocs] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false)
-  const [f, setF] = useState({ name: '', address: '', city: '', service_type: '', notes: '' })
+  const blank = { name: '', address: '', city: '', service_type: 'Landscaping', phone: '', frequency: 'Weekly', subcontractor: '' }
+  const [f, setF] = useState(blank)
   const load = async () => { const { data } = await supabase.from('locations').select('*').order('name'); setLocs(data || []); setBusy(false) }
   useEffect(() => { load() }, [])
-  const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('locations').insert(f); setF({ name: '', address: '', city: '', service_type: '', notes: '' }); setAdd(false); setSaving(false); load() }
+  const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('locations').insert({ ...f, active: true }); setF(blank); setAdd(false); setSaving(false); load() }
   const toggle = async l => { await supabase.from('locations').update({ active: !l.active }).eq('id', l.id); load() }
 
   return (
     <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>Locations</h1><button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add</>}</button></div>
-      {add && <div className="card" style={{ marginBottom: 16 }}><div style={{ fontWeight: 700, marginBottom: 14 }}>New Location</div><form onSubmit={save}><div className="fg2" style={{ marginBottom: 14 }}>{[['name', 'Name', true], ['address', 'Address'], ['city', 'City, State'], ['service_type', 'Service Type']].map(([k, l, r]) => <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}</div><button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save'}</button></form></div>}
+      {add && <div className="card" style={{ marginBottom: 16 }}><div style={{ fontWeight: 700, marginBottom: 14 }}>New Location</div><form onSubmit={save}>
+        <div className="fg2" style={{ marginBottom: 14 }}>
+          {[['name', 'Name', true], ['address', 'Address'], ['city', 'City, State'], ['phone', 'Phone'], ['subcontractor', 'Subcontractor']].map(([k, l, r]) => <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}
+          <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={f.service_type} onChange={e => setF({ ...f, service_type: e.target.value })}><option>Landscaping</option><option>Janitorial</option><option>Floor Care</option><option>Pressure Washing</option></select></div>
+          <div className="field"><label className="field-lbl">Frequency</label><select className="inp" value={f.frequency} onChange={e => setF({ ...f, frequency: e.target.value })}><option>Weekly</option><option>Biweekly</option><option>Monthly</option></select></div>
+        </div>
+        <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save'}</button>
+      </form></div>}
       <div className="card card-f">
-        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Address</th><th>City</th><th>Service</th><th>Status</th><th></th></tr></thead><tbody>
-          {locs.map(l => <tr key={l.id}><td style={{ fontWeight: 600 }}><MapPin size={12} style={{ color: 'var(--g-light)', marginRight: 5 }} />{l.name}</td><td style={{ fontSize: 12 }}>{l.address}</td><td style={{ fontSize: 12 }}>{l.city}</td><td style={{ fontSize: 12 }}>{l.service_type}</td><td>{l.active ? <span className="bdg bdg-g">Active</span> : <span className="bdg bdg-x">Off</span>}</td><td><button className="btn btn-g btn-sm" onClick={() => toggle(l)}>{l.active ? 'Deactivate' : 'Activate'}</button></td></tr>)}
+        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Address</th><th>Service</th><th>Freq</th><th>Sub</th><th>Status</th><th></th></tr></thead><tbody>
+          {locs.map(l => <tr key={l.id}><td style={{ fontWeight: 600 }}><MapPin size={12} style={{ color: 'var(--g-light)', marginRight: 5 }} />{l.name}</td><td style={{ fontSize: 12 }}><div>{l.address}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.city}</div></td><td style={{ fontSize: 12 }}>{l.service_type}</td><td style={{ fontSize: 12 }}>{l.frequency || '—'}</td><td style={{ fontSize: 12 }}>{l.subcontractor || '—'}</td><td>{l.active ? <span className="bdg bdg-g">Active</span> : <span className="bdg bdg-x">Off</span>}</td><td><button className="btn btn-g btn-sm" onClick={() => toggle(l)}>{l.active ? 'Deactivate' : 'Activate'}</button></td></tr>)}
         </tbody></table></div>}
       </div>
     </div>
   )
 }
 
-/* ═══ CREW ═══ */
+/* ═══ CREW / ACCOUNTS ═══ */
+const ROLE_LABEL = { manager: 'Manager', subcontractor: 'Crew', viewer: 'Viewer' }
 function Crew() {
-  const [crew, setCrew] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [err, setErr] = useState(''), [ok, setOk] = useState('')
-  const [f, setF] = useState({ full_name: '', email: '', password: '', phone: '' })
-  const load = async () => { const { data } = await supabase.from('profiles').select('*').eq('role', 'subcontractor').order('full_name'); setCrew(data || []); setBusy(false) }
+  const [people, setPeople] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [err, setErr] = useState(''), [ok, setOk] = useState('')
+  const [f, setF] = useState({ full_name: '', email: '', password: '', phone: '', role: 'subcontractor' })
+  const load = async () => { const { data } = await supabase.from('profiles').select('*').order('role').order('full_name'); setPeople(data || []); setBusy(false) }
   useEffect(() => { load() }, [])
   const save = async e => {
     e.preventDefault(); setSaving(true); setErr(''); setOk('')
     try {
-      const { error } = await supabase.auth.signUp({ email: f.email, password: f.password, options: { data: { full_name: f.full_name, role: 'subcontractor', phone: f.phone } } })
+      const { error } = await createUserAccount({ email: f.email, password: f.password, full_name: f.full_name, role: f.role, phone: f.phone })
       if (error) throw error
-      setOk(`Account created for ${f.full_name}. Share login: ${f.email} / ${f.password}`)
-      setF({ full_name: '', email: '', password: '', phone: '' }); setAdd(false); setTimeout(load, 1500)
+      setOk(`${ROLE_LABEL[f.role]} account created for ${f.full_name}. Login: ${f.email} / ${f.password}`)
+      setF({ full_name: '', email: '', password: '', phone: '', role: 'subcontractor' }); setAdd(false); setTimeout(load, 1500)
     } catch (e) { setErr(e.message) }
     setSaving(false)
   }
+  const changeRole = async (p, role) => { await supabase.from('profiles').update({ role }).eq('id', p.id); load() }
 
   return (
     <div className="pg">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>Crew</h1><button className="btn btn-p" onClick={() => { setAdd(!add); setErr(''); setOk('') }}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Member</>}</button></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>Accounts</h1><button className="btn btn-p" onClick={() => { setAdd(!add); setErr(''); setOk('') }}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Account</>}</button></div>
       {ok && <div className="alrt alrt-ok" style={{ marginBottom: 14 }}><CheckCircle2 size={14} />{ok}</div>}
       {err && <div className="alrt alrt-err" style={{ marginBottom: 14 }}><AlertCircle size={14} />{err}</div>}
-      {add && <div className="card" style={{ marginBottom: 16 }}><div style={{ fontWeight: 700, marginBottom: 14 }}>New Crew Member</div><p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>Create their login. Share email + password with them via WhatsApp or text.</p><form onSubmit={save}><div className="fg2" style={{ marginBottom: 14 }}>{[['full_name', 'Full Name', 'text', true], ['phone', 'Phone', 'text'], ['email', 'Email', 'email', true], ['password', 'Password', 'password', true]].map(([k, l, t, r]) => <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" type={t} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}</div><button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Create Account'}</button></form></div>}
+      {add && <div className="card" style={{ marginBottom: 16 }}><div style={{ fontWeight: 700, marginBottom: 14 }}>New Account</div><p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 14 }}>Create a login and pick their role. Share email + password with them.</p><form onSubmit={save}>
+        <div className="fg2" style={{ marginBottom: 14 }}>
+          {[['full_name', 'Full Name', 'text', true], ['phone', 'Phone', 'text'], ['email', 'Email', 'email', true], ['password', 'Password', 'password', true]].map(([k, l, t, r]) => <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" type={t} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}
+          <div className="field"><label className="field-lbl">Role</label>
+            <select className="inp" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
+              <option value="subcontractor">Crew (field app)</option>
+              <option value="manager">Manager (full access)</option>
+              <option value="viewer">Viewer (read-only + flag)</option>
+            </select>
+          </div>
+        </div>
+        <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Create Account'}</button>
+      </form></div>}
       <div className="card card-f">
-        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : crew.length === 0 ? <div className="empty"><Users size={24} /><p>No crew yet</p></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Since</th></tr></thead><tbody>
-          {crew.map(c => <tr key={c.id}><td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="av">{c.full_name?.[0]}</div><span style={{ fontWeight: 600 }}>{c.full_name}</span></div></td><td style={{ fontSize: 12 }}>{c.email}</td><td style={{ fontSize: 12 }}>{c.phone || '—'}</td><td className="mono" style={{ fontSize: 11 }}>{c.created_at ? format(new Date(c.created_at), 'MMM d, yyyy') : '—'}</td></tr>)}
+        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : people.length === 0 ? <div className="empty"><Users size={24} /><p>No accounts yet</p></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Since</th></tr></thead><tbody>
+          {people.map(c => <tr key={c.id}>
+            <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="av">{c.full_name?.[0]}</div><span style={{ fontWeight: 600 }}>{c.full_name}</span></div></td>
+            <td style={{ fontSize: 12 }}>{c.email}</td>
+            <td style={{ fontSize: 12 }}>{c.phone || '—'}</td>
+            <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.role} onChange={e => changeRole(c, e.target.value)}>
+              <option value="subcontractor">Crew</option><option value="manager">Manager</option><option value="viewer">Viewer</option>
+            </select></td>
+            <td className="mono" style={{ fontSize: 11 }}>{c.created_at ? format(new Date(c.created_at), 'MMM d, yyyy') : '—'}</td>
+          </tr>)}
         </tbody></table></div>}
       </div>
     </div>
