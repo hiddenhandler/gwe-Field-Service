@@ -139,6 +139,9 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg-
 
 .fg{display:grid;gap:12px}.fg2{display:grid;gap:12px;grid-template-columns:1fr 1fr}
 
+.remember-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 2px;font-size:14px;color:var(--t2);user-select:none;-webkit-tap-highlight-color:transparent}
+.remember-row input{width:20px;height:20px;flex-shrink:0;accent-color:var(--g);cursor:pointer}
+
 @media(max-width:768px){
   .side{display:none}.tabs{display:flex}.pg{padding:14px 12px 76px}
   .stats{grid-template-columns:1fr 1fr}.hm{display:none!important}.fg2{grid-template-columns:1fr}

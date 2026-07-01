@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../stores/auth'
+import { setRememberMe, getRememberMe } from '../lib/supabase'
 import { AlertCircle } from 'lucide-react'
 
 export default function Login() {
@@ -9,12 +10,14 @@ export default function Login() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [logoOk, setLogoOk] = useState(true)
+  const [remember, setRemember] = useState(getRememberMe())
   const { signIn } = useAuth()
   const nav = useNavigate()
 
   const go = async e => {
     e.preventDefault(); setBusy(true); setErr('')
     try {
+      setRememberMe(remember)
       await signIn(email, pass)
       // Profile is fetched inside signIn — read it directly.
       // Crew -> field app; managers + viewers -> manager console.
@@ -38,6 +41,10 @@ export default function Login() {
           {err && <div className="alrt alrt-err"><AlertCircle size={15} style={{ flexShrink: 0 }} />{err}</div>}
           <div className="field"><label className="field-lbl">Email</label><input className="inp" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></div>
           <div className="field"><label className="field-lbl">Password</label><input className="inp" type="password" placeholder="••••••••" value={pass} onChange={e => setPass(e.target.value)} required /></div>
+          <label className="remember-row">
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+            <span>Keep me logged in on this device</span>
+          </label>
           <button className="btn btn-p btn-f btn-lg" type="submit" disabled={busy} style={{ marginTop: 4 }}>
             {busy ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Sign In'}
           </button>
