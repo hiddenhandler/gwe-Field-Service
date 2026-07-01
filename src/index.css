@@ -123,7 +123,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg-
 .cal-day:hover{border-color:var(--bd2)}.cal-day.today{border-color:var(--g-edge);background:var(--g-glow)}
 .cal-day.other{opacity:.3}.cal-num{font-size:12px;font-weight:600;margin-bottom:3px}
 .cal-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin:1px}
-.cal-dot.green{background:var(--g-light)}.cal-dot.gray{background:var(--t3)}.cal-dot.red{background:var(--red)}
+.cal-dot.green{background:var(--g-light)}.cal-dot.gray{background:var(--t3)}.cal-dot.red{background:var(--red)}.cal-dot.blue{background:var(--blue)}
 
 /* ─── ACTIVE VISIT ─── */
 .active-card{background:var(--bg2);border:1.5px solid var(--g-edge);border-radius:var(--r3);padding:20px;box-shadow:0 0 40px var(--g-glow)}

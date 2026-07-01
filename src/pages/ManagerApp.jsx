@@ -66,22 +66,29 @@ function Dashboard({ go }) {
 function CalendarView() {
   const [month, setMonth] = useState(new Date())
   const [visits, setVisits] = useState([])
+  const [sched, setSched] = useState([])
   const [selDay, setSelDay] = useState(null)
   const [dayVisits, setDayVisits] = useState([])
+  const [daySched, setDaySched] = useState([])
 
   useEffect(() => {
     const s = startOfMonth(month).toISOString(), e = endOfMonth(month).toISOString()
     supabase.from('visits').select('*, profiles(full_name), locations(name, city)').gte('check_in_at', s).lte('check_in_at', e).order('check_in_at').then(({ data }) => setVisits(data || []))
+    const sd = format(startOfMonth(month), 'yyyy-MM-dd'), ed = format(endOfMonth(month), 'yyyy-MM-dd')
+    supabase.from('schedule').select('*').gte('service_date', sd).lte('service_date', ed).order('service_date').then(({ data }) => setSched(data || []))
   }, [month])
 
   const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) })
   const firstDow = getDay(startOfMonth(month))
   const blanks = Array(firstDow).fill(null)
   const dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  // schedule dates are 'yyyy-MM-dd' — compare as local calendar day
+  const schedOn = (d) => sched.filter(x => x.service_date === format(d, 'yyyy-MM-dd'))
 
   const selectDay = (d) => {
     setSelDay(d)
     setDayVisits(visits.filter(v => v.check_in_at && isSameDay(new Date(v.check_in_at), d)))
+    setDaySched(schedOn(d))
   }
 
   return (
@@ -100,12 +107,18 @@ function CalendarView() {
           {blanks.map((_, i) => <div key={`b${i}`} className="cal-day other" />)}
           {days.map(d => {
             const dv = visits.filter(v => v.check_in_at && isSameDay(new Date(v.check_in_at), d))
+            const sv = schedOn(d)
             const active = dv.some(v => v.status === 'checked_in')
             const flagged = dv.some(v => v.status === 'flagged')
             return (
               <div key={d.toISOString()} className={`cal-day ${isToday(d) ? 'today' : ''} ${selDay && isSameDay(d, selDay) ? 'today' : ''}`} onClick={() => selectDay(d)}>
                 <div className="cal-num">{format(d, 'd')}</div>
-                <div>{dv.length > 0 && <span className={`cal-dot ${active ? 'green' : flagged ? 'red' : 'gray'}`} />}{dv.length > 1 && <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 2 }}>{dv.length}</span>}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {dv.length > 0 && <span className={`cal-dot ${active ? 'green' : flagged ? 'red' : 'gray'}`} />}
+                  {dv.length > 1 && <span style={{ fontSize: 10, color: 'var(--t3)' }}>{dv.length}</span>}
+                  {sv.length > 0 && <span className="cal-dot blue" />}
+                  {sv.length > 0 && <span style={{ fontSize: 10, color: 'var(--blue)' }}>{sv.length}</span>}
+                </div>
               </div>
             )
           })}
@@ -113,8 +126,24 @@ function CalendarView() {
       </div>
       {selDay && (
         <div>
+          {daySched.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div className="sec-hd"><span className="sec-t">Scheduled — {daySched.length} job{daySched.length !== 1 ? 's' : ''}</span></div>
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                {daySched.map(j => (
+                  <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{j.location_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--t3)' }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</div>
+                    </div>
+                    <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="sec-hd"><span className="sec-t">{format(selDay, 'MMMM d, yyyy')} — {dayVisits.length} visit{dayVisits.length !== 1 ? 's' : ''}</span></div>
-          {dayVisits.length === 0 ? <div className="card" style={{ textAlign: 'center', padding: 30, color: 'var(--t3)', fontSize: 13 }}>No visits on this day</div> : (
+          {dayVisits.length === 0 ? <div className="card" style={{ textAlign: 'center', padding: 30, color: 'var(--t3)', fontSize: 13 }}>{daySched.length > 0 ? 'No clock-ins yet on this day' : 'No visits on this day'}</div> : (
             dayVisits.map(v => (
               <div key={v.id} className="card" style={{ padding: 14, marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
