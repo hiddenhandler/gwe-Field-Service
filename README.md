@@ -27,7 +27,7 @@ Two access points, one app:
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=eyJhbGci...
-   VITE_MANAGER_EMAIL=che@greatwaye.com
+   VITE_MANAGER_EMAIL=@ye.com
    ```
 4. Click **Deploy** → get your URL
 
@@ -38,7 +38,7 @@ In Supabase → **Authentication → Users → Invite User**:
 
 Then in **SQL Editor** run:
 ```sql
-UPDATE profiles SET role = 'manager' WHERE email = 'che@greatwaye.com';
+UPDATE profiles SET role = 'manager' WHERE email = '@ye.com';
 UPDATE profiles SET role = 'manager' WHERE email = 'YOUR_EMAIL_HERE';
 ```
 

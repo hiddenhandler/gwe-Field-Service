@@ -8,13 +8,19 @@ export default function Login() {
   const [pass, setPass] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+<<<<<<< HEAD
   const { signIn } = useAuth()
+=======
+  const signIn = useAuth(s => s.signIn)
+  const profile = useAuth(s => s.profile)
+>>>>>>> 014464247fe5a917ace077853f6743be0aae82c7
   const nav = useNavigate()
 
   const go = async e => {
     e.preventDefault(); setBusy(true); setErr('')
     try {
       await signIn(email, pass)
+<<<<<<< HEAD
       // Profile is fetched inside signIn — read it directly
       const p = useAuth.getState().profile
       nav(p?.role === 'manager' ? '/manager' : '/field', { replace: true })
@@ -22,6 +28,12 @@ export default function Login() {
       setErr(e.message || 'Login failed')
       setBusy(false)
     }
+=======
+      const p = useAuth.getState().profile
+      if (p?.role === 'manager') nav('/manager', { replace: true })
+      else nav('/field', { replace: true })
+    } catch (e) { setErr(e.message || 'Login failed'); setBusy(false) }
+>>>>>>> 014464247fe5a917ace077853f6743be0aae82c7
   }
 
   return (
