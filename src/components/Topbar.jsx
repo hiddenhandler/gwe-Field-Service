@@ -11,7 +11,7 @@ export default function Topbar() {
     <header className="top">
       <div className="top-brand">
         {logoOk
-          ? <img src="/logo.png" alt="Great Way Environmental" className="top-logo-img" onError={() => setLogoOk(false)} />
+          ? <img src="/logo.svg" alt="Great Way Environmental" className="top-logo-img" onError={() => setLogoOk(false)} />
           : <div className="top-logo">GW</div>}
         <div><div className="top-name">Great Way Environmental</div><div className="top-sub">Field Service</div></div>
       </div>
@@ -21,6 +21,7 @@ export default function Topbar() {
         <button className="btn btn-g btn-sm" onClick={async () => { await signOut(); nav('/login') }}>
           <LogOut size={14} /><span className="hm">Sign out</span>
         </button>
+        {logoOk && <img src="/logo.svg" alt="" className="top-logo-corner hm" />}
       </div>
     </header>
   )

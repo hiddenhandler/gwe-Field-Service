@@ -16,22 +16,27 @@ function Bdg({ s }) {
 
 /* ═══ DASHBOARD ═══ */
 function Dashboard({ go }) {
-  const [s, setS] = useState({ active: 0, today: 0, week: 0, sites: 0 })
+  const [s, setS] = useState({ active: 0, today: 0, week: 0, sites: 0, flagged: 0 })
   const [recent, setRecent] = useState([])
+  const [todayJobs, setTodayJobs] = useState([])
   const [busy, setBusy] = useState(true)
 
   const load = useCallback(async () => {
     setBusy(true)
     const td = startOfDay(new Date()).toISOString(), wk = subDays(new Date(), 7).toISOString()
-    const [a, t, w, si, r] = await Promise.all([
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const [a, t, w, si, fl, r, sc] = await Promise.all([
       supabase.from('visits').select('*', { count: 'exact', head: true }).eq('status', 'checked_in'),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', td),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', wk),
       supabase.from('locations').select('*', { count: 'exact', head: true }).eq('active', true),
+      supabase.from('visits').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
       supabase.from('visits').select('*, profiles(full_name), locations(name, city, service_type)').order('created_at', { ascending: false }).limit(8),
+      supabase.from('schedule').select('*').eq('service_date', todayStr).order('location_name'),
     ])
-    setS({ active: a.count || 0, today: t.count || 0, week: w.count || 0, sites: si.count || 0 })
+    setS({ active: a.count || 0, today: t.count || 0, week: w.count || 0, sites: si.count || 0, flagged: fl.count || 0 })
     setRecent(r.data || [])
+    setTodayJobs(sc.data || [])
     setBusy(false)
   }, [])
   useEffect(() => { load() }, [load])
@@ -43,13 +48,27 @@ function Dashboard({ go }) {
         <button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /> Refresh</button>
       </div>
       <div className="stats" style={{ marginBottom: 20 }}>
-        {[{ l: 'On Site Now', v: s.active, g: true }, { l: 'Visits Today', v: s.today }, { l: 'This Week', v: s.week }, { l: 'Active Sites', v: s.sites }].map(x => (
-          <div key={x.l} className="stat" style={x.g && s.active > 0 ? { borderColor: 'var(--g-edge)', boxShadow: '0 0 20px var(--g-glow)' } : {}}>
-            <div className={`stat-n ${x.g ? 'gr' : ''}`}>{x.v}</div><div className="stat-l">{x.l}</div>
+        {[{ l: 'On Site Now', v: s.active, g: true }, { l: 'Visits Today', v: s.today }, { l: 'Scheduled Today', v: todayJobs.length, b: true }, { l: 'Flagged', v: s.flagged, r: true }, { l: 'This Week', v: s.week }, { l: 'Active Sites', v: s.sites }].map(x => (
+          <div key={x.l} className="stat" style={x.g && s.active > 0 ? { borderColor: 'var(--g-edge)', boxShadow: '0 0 20px var(--g-glow)' } : x.r && s.flagged > 0 ? { borderColor: 'rgba(224,82,82,.35)' } : {}}>
+            <div className="stat-n" style={{ color: x.g && s.active > 0 ? 'var(--g-light)' : x.r && s.flagged > 0 ? 'var(--red)' : x.b && todayJobs.length > 0 ? 'var(--blue)' : undefined }}>{x.v}</div><div className="stat-l">{x.l}</div>
           </div>
         ))}
       </div>
-      {s.active > 0 && <div className="alrt alrt-ok" style={{ marginBottom: 18 }}><CheckCircle2 size={15} />{s.active} crew member{s.active > 1 ? 's' : ''} currently on site</div>}
+      {s.active > 0 && <div className="alrt alrt-ok" style={{ marginBottom: 12 }}><CheckCircle2 size={15} />{s.active} crew member{s.active > 1 ? 's' : ''} currently on site</div>}
+      {s.flagged > 0 && <div className="alrt alrt-err" style={{ marginBottom: 18, cursor: 'pointer' }} onClick={() => go('visits')}><Flag size={15} />{s.flagged} flagged visit{s.flagged > 1 ? 's' : ''} need review →</div>}
+      {todayJobs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="sec-hd"><span className="sec-t">Today's Schedule — {todayJobs.length} job{todayJobs.length !== 1 ? 's' : ''}</span><button className="btn btn-g btn-sm" onClick={() => go('cal')}>Calendar →</button></div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {todayJobs.map(j => (
+              <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                <div><span style={{ fontWeight: 600 }}>{j.location_name}</span><span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 8 }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</span></div>
+                <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="sec-hd"><span className="sec-t">Recent Activity</span><button className="btn btn-g btn-sm" onClick={() => go('visits')}>View all →</button></div>
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin" /></div> : recent.length === 0 ? <div className="empty"><Clock size={24} /><p>No visits yet</p></div> : (
@@ -360,14 +379,14 @@ export default function ManagerApp() {
     { id: 'cal', label: 'Calendar', icon: <Calendar size={16} /> },
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Locations', icon: <MapPin size={16} /> },
-    { id: 'crew', label: 'Crew', icon: <Users size={16} /> },
+    { id: 'crew', label: 'Accounts', icon: <Users size={16} /> },
   ]
   const allMobile = [
     { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'locs', label: 'Sites', icon: <MapPin size={20} /> },
-    { id: 'crew', label: 'Crew', icon: <Users size={20} /> },
+    { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
   // Viewers get read-only access: no Locations / Crew management
   const menuItems = isViewer ? allMenu.filter(i => !['locs', 'crew'].includes(i.id)) : allMenu
@@ -389,7 +408,7 @@ export default function ManagerApp() {
           {tab === 'crew' && !isViewer && <Crew />}
         </main>
       </div>
-      <nav className="tabs" style={{ display: 'none' }}>
+      <nav className="tabs">
         {mobileItems.map(i => <button key={i.id} className={tab === i.id ? 'on' : ''} onClick={() => setTab(i.id)}>{i.icon}{i.label}</button>)}
       </nav>
     </div>

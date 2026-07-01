@@ -23,6 +23,7 @@ a{color:var(--g-light);text-decoration:none}
 .top-brand{display:flex;align-items:center;gap:10px}
 .top-logo{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#fff;flex-shrink:0}
 .top-logo-img{width:40px;height:40px;object-fit:contain;flex-shrink:0}
+.top-logo-corner{width:34px;height:34px;object-fit:contain;flex-shrink:0;margin-left:6px;opacity:.9}
 .top-name{font-weight:700;font-size:14px;line-height:1.15}.top-sub{font-size:10px;color:var(--t3);font-weight:500}
 .top-r{display:flex;align-items:center;gap:10px}
 .top-user{text-align:right}.top-user b{display:block;font-size:13px;font-weight:600;color:var(--t1)}.top-user em{font-style:normal;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;font-weight:600}

@@ -1,0 +1,29 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Great Way Environmental">
+  <defs>
+    <path id="gweTop" d="M 22 100 A 78 78 0 0 1 178 100" fill="none"/>
+    <path id="gweBot" d="M 30 114 A 70 70 0 0 0 170 114" fill="none"/>
+    <linearGradient id="gweWing" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2f8f45"/>
+      <stop offset="1" stop-color="#7ccb7f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- circular wordmark -->
+  <g fill="#dfeee3" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="11.5" letter-spacing="1.7">
+    <text><textPath href="#gweTop" startOffset="50%" text-anchor="middle">GREATWAY ENVIRONMENTAL</textPath></text>
+    <text><textPath href="#gweBot" startOffset="50%" text-anchor="middle">GREATWAY ENVIRONMENTAL</textPath></text>
+  </g>
+
+  <!-- side dots -->
+  <circle cx="14" cy="103" r="3.4" fill="#dfeee3"/>
+  <circle cx="186" cy="103" r="3.4" fill="#dfeee3"/>
+
+  <!-- wing -->
+  <g fill="url(#gweWing)" transform="translate(2 -4) rotate(-7 100 100)">
+    <path d="M55 123 C92 96 128 83 158 82 C127 95 92 109 60 124 Z"/>
+    <path d="M57 124 C93 103 128 91 159 92 C129 103 95 114 61 126 Z" fill="#3a9b52"/>
+    <path d="M58 126 C94 110 126 99 156 101 C129 110 97 119 62 127 Z"/>
+    <path d="M60 127 C93 117 122 108 150 110 C127 117 98 123 63 129 Z" fill="#3a9b52"/>
+    <path d="M62 129 C90 123 116 117 140 119 C121 123 96 127 65 130 Z"/>
+  </g>
+</svg>
