@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, XCircle, Clock, History, User, MapPin, Camera, Pen, LogOut, AlertCircle } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { CheckCircle2, XCircle, Clock, History, User, MapPin, Camera, Pen, LogOut, AlertCircle, Calendar } from 'lucide-react'
+import { format, formatDistanceToNow, isToday, parseISO } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
@@ -251,6 +251,58 @@ function HistoryTab() {
   )
 }
 
+/* ═══ SCHEDULE TAB ═══ */
+function ScheduleTab() {
+  const { profile } = useAuth()
+  const [jobs, setJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [mineOnly, setMineOnly] = useState(false)
+  const firstName = profile?.full_name?.split(' ')[0]?.toLowerCase() || ''
+
+  useEffect(() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    supabase.from('schedule').select('*').gte('service_date', today).order('service_date').order('location_name').limit(120)
+      .then(({ data }) => { setJobs(data || []); setLoading(false) })
+  }, [])
+
+  if (loading) return <div className="loader"><div className="spin spin-lg" /></div>
+
+  const shown = mineOnly ? jobs.filter(j => (j.subcontractor || '').toLowerCase().includes(firstName)) : jobs
+  // group by date
+  const groups = {}
+  shown.forEach(j => { (groups[j.service_date] = groups[j.service_date] || []).push(j) })
+  const dates = Object.keys(groups).sort()
+
+  return (
+    <div className="pg" style={{ paddingBottom: 80 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800 }}>Schedule</h1>
+        <button className={`btn btn-sm ${mineOnly ? 'btn-p' : 'btn-g'}`} onClick={() => setMineOnly(!mineOnly)}>{mineOnly ? 'My jobs' : 'All jobs'}</button>
+      </div>
+      {dates.length === 0 ? (
+        <div className="card empty"><Calendar size={32} /><div style={{ fontWeight: 600, marginTop: 8 }}>No upcoming jobs</div><p>{mineOnly ? 'Nothing assigned to you yet' : 'Nothing scheduled'}</p></div>
+      ) : dates.map(d => {
+        const dt = parseISO(d)
+        return (
+          <div key={d} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: isToday(dt) ? 'var(--g-light)' : 'var(--t2)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {format(dt, 'EEEE, MMM d')}{isToday(dt) && <span className="bdg bdg-g" style={{ fontSize: 10 }}>Today</span>}
+            </div>
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {groups[d].map(j => (
+                <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid var(--bd)' }}>
+                  <div><div style={{ fontWeight: 600, fontSize: 14 }}>{j.location_name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</div></div>
+                  <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ═══ PROFILE TAB ═══ */
 function ProfileTab() {
   const { profile, signOut } = useAuth()
@@ -279,6 +331,7 @@ export default function FieldApp() {
   const [tab, setTab] = useState('check')
   const tabs = [
     { id: 'check', label: 'Check In', icon: <CheckCircle2 size={20} /> },
+    { id: 'schedule', label: 'Schedule', icon: <Calendar size={20} /> },
     { id: 'history', label: 'History', icon: <History size={20} /> },
     { id: 'profile', label: 'Profile', icon: <User size={20} /> },
   ]
@@ -288,6 +341,7 @@ export default function FieldApp() {
       <Topbar />
       <div style={{ flex: 1 }}>
         {tab === 'check' && <CheckInTab />}
+        {tab === 'schedule' && <ScheduleTab />}
         {tab === 'history' && <HistoryTab />}
         {tab === 'profile' && <ProfileTab />}
       </div>

@@ -332,7 +332,7 @@ function Crew() {
     } catch (e) { setErr(e.message) }
     setSaving(false)
   }
-  const changeRole = async (p, role) => { await supabase.from('profiles').update({ role }).eq('id', p.id); load() }
+  const changeRole = async (p, role) => { await supabase.rpc('set_user_role', { target: p.id, new_role: role }); load() }
 
   return (
     <div className="pg">
