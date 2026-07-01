@@ -167,7 +167,7 @@ function CheckInTab() {
           <div style={{ marginBottom: 18 }}>
             <div className="sec-t" style={{ marginBottom: 8 }}>✍️ Manager Signature</div>
             <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 8 }}>Have the on-site manager sign below to confirm the work was completed.</p>
-            <SignaturePad onSave={setSignature} height={140} />
+            <SignaturePad onSave={setSignature} height={220} />
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>

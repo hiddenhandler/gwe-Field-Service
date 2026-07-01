@@ -6,6 +6,7 @@ import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
 const dur = (a, b) => { if (!a || !b) return '—'; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
+const mapUrl = (lat, lng) => (lat != null && lng != null) ? `https://www.google.com/maps?q=${lat},${lng}` : null
 function Bdg({ s }) {
   if (s === 'checked_in') return <span className="bdg bdg-g pulse">Active</span>
   if (s === 'checked_out') return <span className="bdg bdg-x">Done</span>
@@ -125,8 +126,9 @@ function CalendarView() {
                   <span className="mono">Out: {v.check_out_at ? format(new Date(v.check_out_at), 'h:mm a') : '—'}</span>
                   <span className="mono" style={{ color: 'var(--t2)' }}>{dur(v.check_in_at, v.check_out_at)}</span>
                 </div>
-                {(v.photo_url || v.signature_url) && (
+                {(v.photo_url || v.signature_url || mapUrl(v.check_in_lat, v.check_in_lng)) && (
                   <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    {mapUrl(v.check_in_lat, v.check_in_lng) && <a href={mapUrl(v.check_in_lat, v.check_in_lng)} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><MapPin size={11} /> GPS</a>}
                     {v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Camera size={11} /> Photo</a>}
                     {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={11} /> Signature</a>}
                   </div>
@@ -144,7 +146,7 @@ function CalendarView() {
 function AllVisits() {
   const [visits, setVisits] = useState([])
   const [busy, setBusy] = useState(true)
-  const [q, setQ] = useState(''), [status, setSt] = useState('all'), [days, setDays] = useState('7')
+  const [q, setQ] = useState(''), [status, setSt] = useState('all'), [days, setDays] = useState('7'), [flagErr, setFlagErr] = useState('')
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -157,11 +159,18 @@ function AllVisits() {
 
   const filtered = visits.filter(v => { if (!q) return true; const s = q.toLowerCase(); return v.profiles?.full_name?.toLowerCase().includes(s) || v.locations?.name?.toLowerCase().includes(s) })
 
-  const flag = async (id, to) => { await supabase.from('visits').update({ status: to }).eq('id', id); load() }
+  const flag = async (v, to) => {
+    setFlagErr('')
+    const { data, error } = await supabase.from('visits').update({ status: to }).eq('id', v.id).select()
+    if (error) { setFlagErr(error.message); return }
+    if (!data || data.length === 0) { setFlagErr('Update blocked — your account is not a manager (check profiles.role).'); return }
+    load()
+  }
 
   return (
     <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>All Visits</h1><span className="bdg bdg-x">{filtered.length}</span></div>
+      {flagErr && <div className="alrt alrt-err" style={{ marginBottom: 14 }}><AlertCircle size={14} />{flagErr}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ flex: 1, minWidth: 170, position: 'relative' }}><Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--t3)' }} /><input className="inp" style={{ paddingLeft: 30 }} placeholder="Search..." value={q} onChange={e => setQ(e.target.value)} /></div>
         <select className="inp" style={{ width: 130 }} value={status} onChange={e => setSt(e.target.value)}><option value="all">All</option><option value="checked_in">Active</option><option value="checked_out">Done</option><option value="flagged">Flagged</option></select>
@@ -178,10 +187,11 @@ function AllVisits() {
               <td className="mono" style={{ fontSize: 11 }}>{dur(v.check_in_at, v.check_out_at)}</td>
               <td><Bdg s={v.status} /></td>
               <td style={{ whiteSpace: 'nowrap' }}>
+                {mapUrl(v.check_in_lat, v.check_in_lng) && <a href={mapUrl(v.check_in_lat, v.check_in_lng)} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }} title="Check-in GPS location"><MapPin size={10} /></a>}
                 {v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /></a>}
                 {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={10} /></a>}
               </td>
-              <td>{v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v.id, 'checked_out')}>Unflag</button> : v.status !== 'checked_in' && <button className="btn btn-d btn-sm" onClick={() => flag(v.id, 'flagged')}><Flag size={10} /></button>}</td>
+              <td>{v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v, v.check_out_at ? 'checked_out' : 'checked_in')}>Unflag</button> : <button className="btn btn-d btn-sm" onClick={() => flag(v, 'flagged')}><Flag size={10} /></button>}</td>
             </tr>)}
           </tbody></table></div>
         )}
@@ -246,21 +256,26 @@ function Crew() {
 
 /* ═══ MAIN ═══ */
 export default function ManagerApp() {
+  const { profile } = useAuth()
+  const isViewer = profile?.role === 'viewer'
   const [tab, setTab] = useState('dash')
-  const menuItems = [
+  const allMenu = [
     { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={16} /> },
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Locations', icon: <MapPin size={16} /> },
     { id: 'crew', label: 'Crew', icon: <Users size={16} /> },
   ]
-  const mobileItems = [
+  const allMobile = [
     { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'locs', label: 'Sites', icon: <MapPin size={20} /> },
     { id: 'crew', label: 'Crew', icon: <Users size={20} /> },
   ]
+  // Viewers get read-only access: no Locations / Crew management
+  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'crew'].includes(i.id)) : allMenu
+  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'crew'].includes(i.id)) : allMobile
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -274,8 +289,8 @@ export default function ManagerApp() {
           {tab === 'dash' && <Dashboard go={setTab} />}
           {tab === 'cal' && <CalendarView />}
           {tab === 'visits' && <AllVisits />}
-          {tab === 'locs' && <Locations />}
-          {tab === 'crew' && <Crew />}
+          {tab === 'locs' && !isViewer && <Locations />}
+          {tab === 'crew' && !isViewer && <Crew />}
         </main>
       </div>
       <nav className="tabs" style={{ display: 'none' }}>
