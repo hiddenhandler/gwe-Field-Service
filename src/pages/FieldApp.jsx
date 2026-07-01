@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, XCircle, Clock, History, User, MapPin, Camera, Pen, LogOut, AlertCircle, Calendar } from 'lucide-react'
-import { format, formatDistanceToNow, isToday, parseISO } from 'date-fns'
+import { format, isToday, parseISO } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
@@ -13,6 +13,12 @@ const getGeo = () => new Promise(r => {
 })
 
 const dur = (a, b) => { if (!a || !b) return null; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
+const fmtElapsed = (from, nowMs) => {
+  const s = Math.max(0, Math.floor((nowMs - new Date(from).getTime()) / 1000))
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  const p = n => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${p(m)}:${p(sec)}` : `${m}:${p(sec)}`
+}
 
 function Badge({ s }) {
   if (s === 'checked_in') return <span className="bdg bdg-g pulse">Active</span>
@@ -37,6 +43,15 @@ function CheckInTab() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [signature, setSignature] = useState(null)
   const fileRef = useRef(null)
+  const [nowMs, setNowMs] = useState(Date.now())
+
+  // live "on site" clock — ticks every second while checked in
+  useEffect(() => {
+    if (!active) return
+    setNowMs(Date.now())
+    const t = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [active])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -139,7 +154,7 @@ function CheckInTab() {
           </div>
           <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
             <div><div className="sec-t" style={{ marginBottom: 3 }}>Checked in</div><div className="mono" style={{ fontSize: 13, color: 'var(--g-light)' }}>{format(new Date(active.check_in_at), 'h:mm a')}</div></div>
-            <div><div className="sec-t" style={{ marginBottom: 3 }}>On site</div><div className="mono" style={{ fontSize: 13 }}>{formatDistanceToNow(new Date(active.check_in_at))}</div></div>
+            <div><div className="sec-t" style={{ marginBottom: 3 }}>On site</div><div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--g-light)' }}>{fmtElapsed(active.check_in_at, nowMs)}</div></div>
             <div><div className="sec-t" style={{ marginBottom: 3 }}>Service</div><div style={{ fontSize: 13 }}>{active.locations.service_type}</div></div>
           </div>
           <button className="big big-out" onClick={() => setCheckoutMode(true)}>
