@@ -116,6 +116,15 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg-
 .photo-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1px dashed var(--bd2);border-radius:var(--r);background:var(--bg3);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;width:100%}
 .photo-btn:hover{border-color:var(--g);color:var(--g-light);background:var(--g-glow)}
 .photo-btn input{display:none}
+.loc-list{margin-top:8px;max-height:280px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg3)}
+.loc-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;border-bottom:1px solid var(--bd);background:none;cursor:pointer;transition:background .1s}
+.loc-item:last-child{border-bottom:none}
+.loc-item:hover,.loc-item:active{background:var(--bg-h)}
+.loc-name{font-size:14px;font-weight:600;color:var(--t1)}
+.loc-street{font-size:12px;color:var(--g-light);margin-top:2px}
+.loc-empty{padding:14px;text-align:center;font-size:13px;color:var(--t3)}
+.loc-selected{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;padding:11px 12px;border:1px solid var(--g-edge);border-radius:var(--r);background:var(--g-glow);cursor:pointer}
+.loc-change{font-size:12px;font-weight:600;color:var(--g-light);flex-shrink:0}
 .photo-preview{width:100%;border-radius:var(--r);border:1px solid var(--bd2);margin-top:10px;max-height:200px;object-fit:cover}
 
 /* ─── CALENDAR ─── */
