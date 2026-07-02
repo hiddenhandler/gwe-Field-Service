@@ -13,6 +13,7 @@ const getGeo = () => new Promise(r => {
 })
 
 const dur = (a, b) => { if (!a || !b) return null; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
+const street = (addr) => (addr || '').split(',')[0].trim()
 const fmtElapsed = (from, nowMs) => {
   const s = Math.max(0, Math.floor((nowMs - new Date(from).getTime()) / 1000))
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
@@ -32,6 +33,7 @@ function CheckInTab() {
   const { user, profile } = useAuth()
   const [locs, setLocs] = useState([])
   const [locId, setLocId] = useState('')
+  const [locQuery, setLocQuery] = useState('')
   const [notes, setNotes] = useState('')
   const [active, setActive] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -199,10 +201,31 @@ function CheckInTab() {
           <div className="fg">
             <div className="field">
               <label className="field-lbl">Select Location</label>
-              <select className="inp" value={locId} onChange={e => setLocId(e.target.value)}>
-                <option value="">— Choose —</option>
-                {locs.map(l => <option key={l.id} value={l.id}>{l.name} · {l.city}</option>)}
-              </select>
+              {(() => {
+                const sel = locs.find(l => l.id === locId)
+                if (sel) return (
+                  <button type="button" className="loc-selected" onClick={() => setLocId('')}>
+                    <div><div className="loc-name">{sel.name}</div><div className="loc-street">{street(sel.address)}</div></div>
+                    <span className="loc-change">Change</span>
+                  </button>
+                )
+                const q = locQuery.trim().toLowerCase()
+                const filtered = q ? locs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : locs
+                return (
+                  <>
+                    <input className="inp" placeholder="Search by name or street…" value={locQuery} onChange={e => setLocQuery(e.target.value)} />
+                    <div className="loc-list">
+                      {filtered.length === 0 ? <div className="loc-empty">No location matches</div> :
+                        filtered.slice(0, 50).map(l => (
+                          <button type="button" key={l.id} className="loc-item" onClick={() => { setLocId(l.id); setLocQuery('') }}>
+                            <div className="loc-name">{l.name}</div>
+                            <div className="loc-street">{street(l.address)}</div>
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )
+              })()}
             </div>
             <div className="field">
               <label className="field-lbl">Notes (optional)</label>
