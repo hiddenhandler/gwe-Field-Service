@@ -46,6 +46,8 @@ function CheckInTab() {
   const [signature, setSignature] = useState(null)
   const fileRef = useRef(null)
   const [nowMs, setNowMs] = useState(Date.now())
+  const [todaySched, setTodaySched] = useState([])
+  const [showPicker, setShowPicker] = useState(false)
 
   // live "on site" clock — ticks every second while checked in
   useEffect(() => {
@@ -57,33 +59,45 @@ function CheckInTab() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: locations }, { data: visits }] = await Promise.all([
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const [{ data: locations }, { data: visits }, { data: sched }] = await Promise.all([
       supabase.from('locations').select('*').eq('active', true).order('name'),
-      supabase.from('visits').select('*, locations(name, address, city, service_type)').eq('subcontractor_id', user.id).eq('status', 'checked_in').limit(1)
+      supabase.from('visits').select('*, locations(name, address, city, service_type)').eq('subcontractor_id', user.id).eq('status', 'checked_in').limit(1),
+      supabase.from('schedule').select('*').eq('service_date', today).order('location_name'),
     ])
     setLocs(locations || [])
     setActive(visits?.[0] || null)
+    setTodaySched(sched || [])
     setLoading(false)
   }, [user.id])
 
   useEffect(() => { load() }, [load])
 
-  const checkIn = async () => {
-    if (!locId) return; setBusy(true); setMsg(null)
+  const doCheckIn = async (locationId, scheduleId) => {
+    if (!locationId) return; setBusy(true); setMsg(null)
     try {
       const { lat, lng } = await getGeo()
       const { data, error } = await supabase.from('visits').insert({
-        subcontractor_id: user.id, location_id: locId,
+        subcontractor_id: user.id, location_id: locationId,
         check_in_at: new Date().toISOString(), check_in_lat: lat, check_in_lng: lng,
         status: 'checked_in', notes: notes || null, manager_notified: true,
+        schedule_id: scheduleId || null,
       }).select('*, locations(name, address, city, service_type)').single()
       if (error) throw error
       await supabase.from('notifications').insert({ visit_id: data.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_in' })
-      setActive(data); setLocId(''); setNotes('')
+      setActive(data); setLocId(''); setLocQuery(''); setNotes(''); setShowPicker(false)
       setMsg({ ok: true, text: `Checked in at ${data.locations.name}` })
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
   }
+  // check in to a scheduled route stop (matches the schedule row to a location)
+  const checkInStop = (job) => {
+    const loc = locs.find(l => l.name.toLowerCase() === job.location_name.toLowerCase())
+             || locs.find(l => l.name.toLowerCase().includes(job.location_name.toLowerCase()))
+    if (!loc) { setMsg({ ok: false, text: `"${job.location_name}" isn't in Locations yet — use "Other location" or ask a manager to add it.` }); return }
+    doCheckIn(loc.id, job.id)
+  }
+  const checkInOther = () => { if (locId) doCheckIn(locId, null) }
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0]
@@ -125,10 +139,13 @@ function CheckInTab() {
         status: 'checked_out', photo_url: photoUrl, signature_url: sigUrl,
       }).eq('id', active.id)
       if (error) throw error
+      // mark the route stop done (if this visit came from a scheduled job)
+      if (active.schedule_id) { await supabase.rpc('mark_stop_completed', { sched_id: active.schedule_id }) }
       await supabase.from('notifications').insert({ visit_id: active.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_out' })
       const d = dur(active.check_in_at, new Date().toISOString())
       setMsg({ ok: true, text: `Checked out — ${d} on site` })
       setActive(null); setCheckoutMode(false); setPhoto(null); setPhotoPreview(null); setSignature(null)
+      load()
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
   }
