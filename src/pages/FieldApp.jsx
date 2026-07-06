@@ -212,49 +212,88 @@ function CheckInTab() {
           <button className="btn btn-g btn-f" style={{ marginTop: 10 }} onClick={() => setCheckoutMode(false)}>← Go back</button>
         </div>
       ) : (
-        /* CHECK-IN FORM */
+        /* DAILY ROUTE */
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Check In to a Location</div>
-          <div className="fg">
-            <div className="field">
-              <label className="field-lbl">Select Location</label>
-              {(() => {
-                const sel = locs.find(l => l.id === locId)
-                if (sel) return (
-                  <button type="button" className="loc-selected" onClick={() => setLocId('')}>
-                    <div><div className="loc-name">{sel.name}</div><div className="loc-street">{street(sel.address)}</div></div>
-                    <span className="loc-change">Change</span>
-                  </button>
-                )
-                const q = locQuery.trim().toLowerCase()
-                const filtered = q ? locs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : locs
-                return (
-                  <>
-                    <input className="inp" placeholder="Search by name or street…" value={locQuery} onChange={e => setLocQuery(e.target.value)} />
-                    <div className="loc-list">
-                      {filtered.length === 0 ? <div className="loc-empty">No location matches</div> :
-                        filtered.slice(0, 50).map(l => (
-                          <button type="button" key={l.id} className="loc-item" onClick={() => { setLocId(l.id); setLocQuery('') }}>
-                            <div className="loc-name">{l.name}</div>
-                            <div className="loc-street">{street(l.address)}</div>
+          {(() => {
+            const first = profile?.full_name?.split(' ')[0]?.toLowerCase() || ''
+            const mine = todaySched.filter(j => (j.subcontractor || '').toLowerCase().includes(first))
+            const route = mine.length ? mine : todaySched
+            const doneCount = route.filter(j => j.status === 'completed').length
+            const locFor = (name) => locs.find(l => l.name.toLowerCase() === name.toLowerCase()) || locs.find(l => l.name.toLowerCase().includes(name.toLowerCase()))
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>Today's Route</div>
+                  {route.length > 0 && <span className="bdg bdg-x">{doneCount}/{route.length} done</span>}
+                </div>
+                {route.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 12 }}>No stops scheduled for you today. Use "Other location" below to check in anywhere.</p>
+                ) : (
+                  <div className="loc-list" style={{ marginBottom: 14 }}>
+                    {route.map(job => {
+                      const complete = job.status === 'completed'
+                      const loc = locFor(job.location_name)
+                      return (
+                        <button type="button" key={job.id} className="route-stop" disabled={complete || busy} onClick={() => checkInStop(job)}>
+                          <div className="route-check">{complete ? <CheckCircle2 size={20} style={{ color: 'var(--g-light)' }} /> : <span className="route-dot" />}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="loc-name" style={complete ? { textDecoration: 'line-through', color: 'var(--t3)' } : {}}>{job.location_name}</div>
+                            <div className="loc-street">{loc ? street(loc.address) : (job.subcontractor || job.service_type)}</div>
+                          </div>
+                          <span className={`bdg ${complete ? 'bdg-g' : 'bdg-x'}`}>{complete ? '✓ Done' : 'Check in'}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <label className="field-lbl">Notes (optional)</label>
+                  <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
+                </div>
+                {!showPicker ? (
+                  <button type="button" className="btn btn-g btn-f" onClick={() => setShowPicker(true)}><MapPin size={14} /> Other location (not on route)</button>
+                ) : (
+                  <div>
+                    <div className="field">
+                      <label className="field-lbl">Other location</label>
+                      {(() => {
+                        const sel = locs.find(l => l.id === locId)
+                        if (sel) return (
+                          <button type="button" className="loc-selected" onClick={() => setLocId('')}>
+                            <div><div className="loc-name">{sel.name}</div><div className="loc-street">{street(sel.address)}</div></div>
+                            <span className="loc-change">Change</span>
                           </button>
-                        ))}
+                        )
+                        const q = locQuery.trim().toLowerCase()
+                        const filtered = q ? locs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : locs
+                        return (
+                          <>
+                            <input className="inp" placeholder="Search by name or street…" value={locQuery} onChange={e => setLocQuery(e.target.value)} />
+                            <div className="loc-list">
+                              {filtered.length === 0 ? <div className="loc-empty">No location matches</div> :
+                                filtered.slice(0, 50).map(l => (
+                                  <button type="button" key={l.id} className="loc-item" onClick={() => { setLocId(l.id); setLocQuery('') }}>
+                                    <div className="loc-name">{l.name}</div>
+                                    <div className="loc-street">{street(l.address)}</div>
+                                  </button>
+                                ))}
+                            </div>
+                          </>
+                        )
+                      })()}
                     </div>
-                  </>
-                )
-              })()}
-            </div>
-            <div className="field">
-              <label className="field-lbl">Notes (optional)</label>
-              <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
-            </div>
-            <button className="big big-in" onClick={checkIn} disabled={busy || !locId}>
-              {busy ? <span className="spin" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,.3)' }} /> : <><CheckCircle2 size={20} /> Check In</>}
-            </button>
-          </div>
-          <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 12 }}>
-            <MapPin size={10} style={{ marginRight: 3 }} />Your manager is notified on every check-in & out
-          </p>
+                    <button className="big big-in" onClick={checkInOther} disabled={busy || !locId} style={{ marginTop: 10 }}>
+                      {busy ? <span className="spin" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,.3)' }} /> : <><CheckCircle2 size={20} /> Check In</>}
+                    </button>
+                    <button type="button" className="btn btn-g btn-f" style={{ marginTop: 8 }} onClick={() => { setShowPicker(false); setLocId(''); setLocQuery('') }}>Cancel</button>
+                  </div>
+                )}
+                <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 12 }}>
+                  <MapPin size={10} style={{ marginRight: 3 }} />Your manager is notified on every check-in & out
+                </p>
+              </>
+            )
+          })()}
         </div>
       )}
     </div>
