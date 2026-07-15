@@ -148,7 +148,12 @@ function CheckInTab() {
   }
 
   const checkOut = async () => {
-    if (!active) return; setBusy(true); setMsg(null)
+    if (!active) return
+    if (afterPhotos.length === 0 || !signature) {
+      setMsg({ ok: false, text: 'Add at least one "after" photo and the manager\'s signature before checking out.' })
+      return
+    }
+    setBusy(true); setMsg(null)
     try {
       const { lat, lng } = await getGeo()
       // Upload "after" photos (up to 2)
@@ -230,10 +235,17 @@ function CheckInTab() {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="big big-out" style={{ flex: 1 }} onClick={checkOut} disabled={busy}>
+            <button className="big big-out" style={{ flex: 1 }} onClick={checkOut} disabled={busy || afterPhotos.length === 0 || !signature}>
               {busy ? <span className="spin" style={{ borderTopColor: 'var(--red)' }} /> : <><XCircle size={18} /> Complete Check Out</>}
             </button>
           </div>
+          {(afterPhotos.length === 0 || !signature) && (
+            <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>
+              {afterPhotos.length === 0 && !signature ? 'Add an after photo and a signature to finish'
+                : afterPhotos.length === 0 ? 'Add at least one after photo to finish'
+                : 'Get the signature to finish'}
+            </p>
+          )}
           <button className="btn btn-g btn-f" style={{ marginTop: 10 }} onClick={() => setCheckoutMode(false)}>← Go back</button>
         </div>
       ) : pending ? (
