@@ -13,6 +13,7 @@ const getGeo = () => new Promise(r => {
 })
 
 const dur = (a, b) => { if (!a || !b) return null; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
+const street = (addr) => (addr || '').split(',')[0].trim()
 const fmtElapsed = (from, nowMs) => {
   const s = Math.max(0, Math.floor((nowMs - new Date(from).getTime()) / 1000))
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
@@ -32,6 +33,7 @@ function CheckInTab() {
   const { user, profile } = useAuth()
   const [locs, setLocs] = useState([])
   const [locId, setLocId] = useState('')
+  const [locQuery, setLocQuery] = useState('')
   const [notes, setNotes] = useState('')
   const [active, setActive] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -44,6 +46,8 @@ function CheckInTab() {
   const [signature, setSignature] = useState(null)
   const fileRef = useRef(null)
   const [nowMs, setNowMs] = useState(Date.now())
+  const [todaySched, setTodaySched] = useState([])
+  const [showPicker, setShowPicker] = useState(false)
 
   // live "on site" clock — ticks every second while checked in
   useEffect(() => {
@@ -55,33 +59,45 @@ function CheckInTab() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: locations }, { data: visits }] = await Promise.all([
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const [{ data: locations }, { data: visits }, { data: sched }] = await Promise.all([
       supabase.from('locations').select('*').eq('active', true).order('name'),
-      supabase.from('visits').select('*, locations(name, address, city, service_type)').eq('subcontractor_id', user.id).eq('status', 'checked_in').limit(1)
+      supabase.from('visits').select('*, locations(name, address, city, service_type)').eq('subcontractor_id', user.id).eq('status', 'checked_in').limit(1),
+      supabase.from('schedule').select('*').eq('service_date', today).order('location_name'),
     ])
     setLocs(locations || [])
     setActive(visits?.[0] || null)
+    setTodaySched(sched || [])
     setLoading(false)
   }, [user.id])
 
   useEffect(() => { load() }, [load])
 
-  const checkIn = async () => {
-    if (!locId) return; setBusy(true); setMsg(null)
+  const doCheckIn = async (locationId, scheduleId) => {
+    if (!locationId) return; setBusy(true); setMsg(null)
     try {
       const { lat, lng } = await getGeo()
       const { data, error } = await supabase.from('visits').insert({
-        subcontractor_id: user.id, location_id: locId,
+        subcontractor_id: user.id, location_id: locationId,
         check_in_at: new Date().toISOString(), check_in_lat: lat, check_in_lng: lng,
         status: 'checked_in', notes: notes || null, manager_notified: true,
+        schedule_id: scheduleId || null,
       }).select('*, locations(name, address, city, service_type)').single()
       if (error) throw error
       await supabase.from('notifications').insert({ visit_id: data.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_in' })
-      setActive(data); setLocId(''); setNotes('')
+      setActive(data); setLocId(''); setLocQuery(''); setNotes(''); setShowPicker(false)
       setMsg({ ok: true, text: `Checked in at ${data.locations.name}` })
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
   }
+  // check in to a scheduled route stop (matches the schedule row to a location)
+  const checkInStop = (job) => {
+    const loc = locs.find(l => l.name.toLowerCase() === job.location_name.toLowerCase())
+             || locs.find(l => l.name.toLowerCase().includes(job.location_name.toLowerCase()))
+    if (!loc) { setMsg({ ok: false, text: `"${job.location_name}" isn't in Locations yet — use "Other location" or ask a manager to add it.` }); return }
+    doCheckIn(loc.id, job.id)
+  }
+  const checkInOther = () => { if (locId) doCheckIn(locId, null) }
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0]
@@ -123,10 +139,13 @@ function CheckInTab() {
         status: 'checked_out', photo_url: photoUrl, signature_url: sigUrl,
       }).eq('id', active.id)
       if (error) throw error
+      // mark the route stop done (if this visit came from a scheduled job)
+      if (active.schedule_id) { await supabase.rpc('mark_stop_completed', { sched_id: active.schedule_id }) }
       await supabase.from('notifications').insert({ visit_id: active.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_out' })
       const d = dur(active.check_in_at, new Date().toISOString())
       setMsg({ ok: true, text: `Checked out — ${d} on site` })
       setActive(null); setCheckoutMode(false); setPhoto(null); setPhotoPreview(null); setSignature(null)
+      load()
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
   }
@@ -193,28 +212,88 @@ function CheckInTab() {
           <button className="btn btn-g btn-f" style={{ marginTop: 10 }} onClick={() => setCheckoutMode(false)}>← Go back</button>
         </div>
       ) : (
-        /* CHECK-IN FORM */
+        /* DAILY ROUTE */
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Check In to a Location</div>
-          <div className="fg">
-            <div className="field">
-              <label className="field-lbl">Select Location</label>
-              <select className="inp" value={locId} onChange={e => setLocId(e.target.value)}>
-                <option value="">— Choose —</option>
-                {locs.map(l => <option key={l.id} value={l.id}>{l.name} · {l.city}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-lbl">Notes (optional)</label>
-              <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
-            </div>
-            <button className="big big-in" onClick={checkIn} disabled={busy || !locId}>
-              {busy ? <span className="spin" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,.3)' }} /> : <><CheckCircle2 size={20} /> Check In</>}
-            </button>
-          </div>
-          <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 12 }}>
-            <MapPin size={10} style={{ marginRight: 3 }} />Your manager is notified on every check-in & out
-          </p>
+          {(() => {
+            const first = profile?.full_name?.split(' ')[0]?.toLowerCase() || ''
+            const mine = todaySched.filter(j => (j.subcontractor || '').toLowerCase().includes(first))
+            const route = mine.length ? mine : todaySched
+            const doneCount = route.filter(j => j.status === 'completed').length
+            const locFor = (name) => locs.find(l => l.name.toLowerCase() === name.toLowerCase()) || locs.find(l => l.name.toLowerCase().includes(name.toLowerCase()))
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>Today's Route</div>
+                  {route.length > 0 && <span className="bdg bdg-x">{doneCount}/{route.length} done</span>}
+                </div>
+                {route.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 12 }}>No stops scheduled for you today. Use "Other location" below to check in anywhere.</p>
+                ) : (
+                  <div className="loc-list" style={{ marginBottom: 14 }}>
+                    {route.map(job => {
+                      const complete = job.status === 'completed'
+                      const loc = locFor(job.location_name)
+                      return (
+                        <button type="button" key={job.id} className="route-stop" disabled={complete || busy} onClick={() => checkInStop(job)}>
+                          <div className="route-check">{complete ? <CheckCircle2 size={20} style={{ color: 'var(--g-light)' }} /> : <span className="route-dot" />}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="loc-name" style={complete ? { textDecoration: 'line-through', color: 'var(--t3)' } : {}}>{job.location_name}</div>
+                            <div className="loc-street">{loc ? street(loc.address) : (job.subcontractor || job.service_type)}</div>
+                          </div>
+                          <span className={`bdg ${complete ? 'bdg-g' : 'bdg-x'}`}>{complete ? '✓ Done' : 'Check in'}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <label className="field-lbl">Notes (optional)</label>
+                  <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
+                </div>
+                {!showPicker ? (
+                  <button type="button" className="btn btn-g btn-f" onClick={() => setShowPicker(true)}><MapPin size={14} /> Other location (not on route)</button>
+                ) : (
+                  <div>
+                    <div className="field">
+                      <label className="field-lbl">Other location</label>
+                      {(() => {
+                        const sel = locs.find(l => l.id === locId)
+                        if (sel) return (
+                          <button type="button" className="loc-selected" onClick={() => setLocId('')}>
+                            <div><div className="loc-name">{sel.name}</div><div className="loc-street">{street(sel.address)}</div></div>
+                            <span className="loc-change">Change</span>
+                          </button>
+                        )
+                        const q = locQuery.trim().toLowerCase()
+                        const filtered = q ? locs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : locs
+                        return (
+                          <>
+                            <input className="inp" placeholder="Search by name or street…" value={locQuery} onChange={e => setLocQuery(e.target.value)} />
+                            <div className="loc-list">
+                              {filtered.length === 0 ? <div className="loc-empty">No location matches</div> :
+                                filtered.slice(0, 50).map(l => (
+                                  <button type="button" key={l.id} className="loc-item" onClick={() => { setLocId(l.id); setLocQuery('') }}>
+                                    <div className="loc-name">{l.name}</div>
+                                    <div className="loc-street">{street(l.address)}</div>
+                                  </button>
+                                ))}
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                    <button className="big big-in" onClick={checkInOther} disabled={busy || !locId} style={{ marginTop: 10 }}>
+                      {busy ? <span className="spin" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,.3)' }} /> : <><CheckCircle2 size={20} /> Check In</>}
+                    </button>
+                    <button type="button" className="btn btn-g btn-f" style={{ marginTop: 8 }} onClick={() => { setShowPicker(false); setLocId(''); setLocQuery('') }}>Cancel</button>
+                  </div>
+                )}
+                <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 12 }}>
+                  <MapPin size={10} style={{ marginRight: 3 }} />Your manager is notified on every check-in & out
+                </p>
+              </>
+            )
+          })()}
         </div>
       )}
     </div>
