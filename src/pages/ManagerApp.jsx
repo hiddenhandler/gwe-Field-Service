@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone } from 'lucide-react'
+import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2 } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
@@ -86,6 +86,8 @@ function Dashboard({ go }) {
 
 /* ═══ CALENDAR ═══ */
 function CalendarView() {
+  const { profile } = useAuth()
+  const canEdit = profile?.role === 'manager'
   const [month, setMonth] = useState(new Date())
   const [visits, setVisits] = useState([])
   const [sched, setSched] = useState([])
@@ -115,6 +117,17 @@ function CalendarView() {
     e.preventDefault(); setSavingJob(true)
     await supabase.from('schedule').insert(job)
     setJob(jobBlank); setAddJob(false); setSavingJob(false)
+    await loadSched()
+  }
+  const updateJob = async (j, action) => {
+    if (action === 'delete') {
+      if (!window.confirm(`Remove ${j.location_name} from ${j.service_date}?`)) return
+      await supabase.from('schedule').delete().eq('id', j.id)
+      setDaySched(prev => prev.filter(x => x.id !== j.id))
+    } else {
+      await supabase.from('schedule').update({ status: action }).eq('id', j.id)
+      setDaySched(prev => prev.map(x => x.id === j.id ? { ...x, status: action } : x))
+    }
     await loadSched()
   }
 
@@ -190,12 +203,19 @@ function CalendarView() {
               <div className="sec-hd"><span className="sec-t">Scheduled — {daySched.length} job{daySched.length !== 1 ? 's' : ''}</span></div>
               <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 {daySched.map(j => (
-                  <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
-                    <div>
+                  <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                    <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600 }}>{j.location_name}</div>
                       <div style={{ fontSize: 11, color: 'var(--t3)' }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</div>
                     </div>
-                    <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>
+                    {canEdit ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={j.status} onChange={e => updateJob(j, e.target.value)}>
+                          <option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="skipped">Skipped</option>
+                        </select>
+                        <button className="btn btn-d btn-sm" onClick={() => updateJob(j, 'delete')} title="Remove job"><Trash2 size={11} /></button>
+                      </div>
+                    ) : <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>}
                   </div>
                 ))}
               </div>
@@ -256,6 +276,13 @@ function AllVisits() {
     if (!data || data.length === 0) { setFlagErr('Update blocked — your account is not a manager (check profiles.role).'); return }
     load()
   }
+  const del = async (v) => {
+    if (!window.confirm(`Delete this check-in — ${v.profiles?.full_name || 'crew'} at ${v.locations?.name || 'location'}? This frees the route stop and can't be undone.`)) return
+    setFlagErr('')
+    const { error } = await supabase.rpc('manager_delete_visit', { v_id: v.id })
+    if (error) { setFlagErr(error.message); return }
+    load()
+  }
 
   return (
     <div className="pg">
@@ -283,7 +310,10 @@ function AllVisits() {
                 {!v.before_photos?.length && !v.after_photos?.length && v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /></a>}
                 {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={10} /></a>}
               </td>
-              <td>{v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v, v.check_out_at ? 'checked_out' : 'checked_in')}>Unflag</button> : <button className="btn btn-d btn-sm" onClick={() => flag(v, 'flagged')}><Flag size={10} /></button>}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>
+                {v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v, v.check_out_at ? 'checked_out' : 'checked_in')}>Unflag</button> : <button className="btn btn-d btn-sm" onClick={() => flag(v, 'flagged')}><Flag size={10} /></button>}
+                <button className="btn btn-d btn-sm" style={{ marginLeft: 4 }} onClick={() => del(v)} title="Delete this check-in"><Trash2 size={10} /></button>
+              </td>
             </tr>)}
           </tbody></table></div>
         )}
