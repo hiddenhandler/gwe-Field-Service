@@ -214,12 +214,12 @@ function CheckInTab() {
         /* CHECKOUT FLOW */
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Checking out of {active.locations.name}</div>
-          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Add up to 2 "after" photos of the finished work and get the manager's signature.</p>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Add up to 5 "after" photos of the finished work and get the manager's signature.</p>
 
           {/* After photos */}
           <div style={{ marginBottom: 18 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>📷 After Photos (up to 2)</div>
-            <PhotoPicker photos={afterPhotos} setPhotos={setAfterPhotos} max={2} />
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 After Photos (up to 5)</div>
+            <PhotoPicker photos={afterPhotos} setPhotos={setAfterPhotos} max={5} />
           </div>
 
           {/* Signature */}
@@ -240,10 +240,10 @@ function CheckInTab() {
         /* BEFORE PHOTOS — clock hasn't started yet */
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Starting: {pending.name}</div>
-          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take 1–2 "before" photos of how the site looks now, then start the job. The clock begins when you check in.</p>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take "before" photos of how the site looks now (up to 5), then start the job. The clock begins when you check in.</p>
           <div style={{ marginBottom: 18 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Before Photos (up to 2)</div>
-            <PhotoPicker photos={beforePhotos} setPhotos={setBeforePhotos} max={2} />
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Before Photos (up to 5)</div>
+            <PhotoPicker photos={beforePhotos} setPhotos={setBeforePhotos} max={5} />
           </div>
           <div className="field" style={{ marginBottom: 14 }}>
             <label className="field-lbl">Notes (optional)</label>

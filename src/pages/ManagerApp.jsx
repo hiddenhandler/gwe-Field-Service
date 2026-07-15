@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
@@ -371,6 +371,63 @@ function Crew() {
             <td className="mono" style={{ fontSize: 11 }}>{c.created_at ? format(new Date(c.created_at), 'MMM d, yyyy') : '—'}</td>
           </tr>)}
         </tbody></table></div>}
+      </div>
+    </div>
+  )
+}
+
+/* ═══ LEADS (manager only) ═══ */
+const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s
+function Leads() {
+  const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
+  const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
+  const [f, setF] = useState(blank)
+  const load = async () => { const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false }); setLeads(data || []); setBusy(false) }
+  useEffect(() => { load() }, [])
+  const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('leads').insert({ ...f, status: 'new' }); setF(blank); setAdd(false); setSaving(false); load() }
+  const upd = async (id, patch) => { await supabase.from('leads').update(patch).eq('id', id); load() }
+  const del = async (id) => { await supabase.from('leads').delete().eq('id', id); load() }
+
+  const shown = filter === 'all' ? leads : leads.filter(l => l.status === filter)
+  const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: leads.filter(l => l.status === s).length }), {})
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const dueSoon = (l) => l.status === 'contacted' && l.callback_date && l.callback_date <= todayStr
+
+  return (
+    <div className="pg">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
+        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Lead</>}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {['all', ...LEAD_STATUS].map(s => (
+          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-p' : 'btn-g'}`} onClick={() => setFilter(s)}>{cap(s)}{s !== 'all' ? ` (${counts[s] || 0})` : ''}</button>
+        ))}
+      </div>
+      {add && <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 14 }}>New Lead</div>
+        <form onSubmit={save}>
+          <div className="fg2" style={{ marginBottom: 14 }}>
+            {[['name', 'Name / Contact', true], ['company', 'Company'], ['phone', 'Phone'], ['email', 'Email'], ['source', 'Source (referral, web…)']].map(([k, l, r]) =>
+              <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}
+          </div>
+          <div className="field" style={{ marginBottom: 14 }}><label className="field-lbl">Notes</label><input className="inp" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+          <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Lead'}</button>
+        </form>
+      </div>}
+      <div className="card card-f">
+        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No leads{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
+          <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Notes</th><th></th></tr></thead><tbody>
+            {shown.map(l => <tr key={l.id} style={dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}}>
+              <td><div style={{ fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</div></td>
+              <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
+              <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
+              <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{l.notes}</td>
+              <td><button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button></td>
+            </tr>)}
+          </tbody></table></div>}
       </div>
     </div>
   )
