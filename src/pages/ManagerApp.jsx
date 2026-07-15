@@ -443,18 +443,20 @@ export default function ManagerApp() {
     { id: 'cal', label: 'Calendar', icon: <Calendar size={16} /> },
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Locations', icon: <MapPin size={16} /> },
+    { id: 'leads', label: 'Leads', icon: <Phone size={16} /> },
     { id: 'crew', label: 'Accounts', icon: <Users size={16} /> },
   ]
   const allMobile = [
     { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
+    { id: 'leads', label: 'Leads', icon: <Phone size={20} /> },
     { id: 'locs', label: 'Sites', icon: <MapPin size={20} /> },
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
-  // Viewers get read-only access: no Locations / Crew management
-  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'crew'].includes(i.id)) : allMenu
-  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'crew'].includes(i.id)) : allMobile
+  // Viewers get read-only access: no Locations / Leads / Crew management
+  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'leads', 'crew'].includes(i.id)) : allMenu
+  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'leads', 'crew'].includes(i.id)) : allMobile
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -469,6 +471,7 @@ export default function ManagerApp() {
           {tab === 'cal' && <CalendarView />}
           {tab === 'visits' && <AllVisits />}
           {tab === 'locs' && !isViewer && <Locations />}
+          {tab === 'leads' && !isViewer && <Leads />}
           {tab === 'crew' && !isViewer && <Crew />}
         </main>
       </div>
