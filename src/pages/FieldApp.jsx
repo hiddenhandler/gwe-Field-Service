@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, XCircle, Clock, History, User, MapPin, Camera, Pen, LogOut, AlertCircle, Calendar } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, History, User, MapPin, Camera, Pen, LogOut, AlertCircle, Calendar, X } from 'lucide-react'
 import { format, isToday, parseISO } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
@@ -28,6 +28,45 @@ function Badge({ s }) {
   return null
 }
 
+// Upload an array of {file} to storage, return the public URLs.
+const uploadPhotos = async (visitId, photos, prefix) => {
+  const urls = []
+  for (let i = 0; i < photos.length; i++) {
+    const ext = (photos[i].file.name.split('.').pop() || 'jpg').toLowerCase()
+    const path = `visits/${visitId}/${prefix}_${i + 1}.${ext}`
+    const { error } = await supabase.storage.from('visit-photos').upload(path, photos[i].file, { upsert: true })
+    if (!error) { const { data } = supabase.storage.from('visit-photos').getPublicUrl(path); if (data?.publicUrl) urls.push(data.publicUrl) }
+  }
+  return urls
+}
+
+// Capture up to `max` photos with thumbnails.
+function PhotoPicker({ photos, setPhotos, max = 2 }) {
+  const onPick = (e) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file || photos.length >= max) return
+    const reader = new FileReader()
+    reader.onload = ev => setPhotos(p => [...p, { file, preview: ev.target.result }])
+    reader.readAsDataURL(file)
+  }
+  return (
+    <div className="photo-grid">
+      {photos.map((p, i) => (
+        <div key={i} className="photo-thumb">
+          <img src={p.preview} alt="" />
+          <button type="button" className="photo-rm" onClick={() => setPhotos(ps => ps.filter((_, idx) => idx !== i))}><X size={12} /></button>
+        </div>
+      ))}
+      {photos.length < max && (
+        <label className="photo-add">
+          <Camera size={18} /><span>Add photo</span>
+          <input type="file" accept="image/*" capture="environment" onChange={onPick} />
+        </label>
+      )}
+    </div>
+  )
+}
+
 /* ═══ CHECK-IN TAB ═══ */
 function CheckInTab() {
   const { user, profile } = useAuth()
@@ -41,13 +80,13 @@ function CheckInTab() {
   const [loading, setLoading] = useState(true)
   // Checkout flow
   const [checkoutMode, setCheckoutMode] = useState(false)
-  const [photo, setPhoto] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(null)
+  const [beforePhotos, setBeforePhotos] = useState([])
+  const [afterPhotos, setAfterPhotos] = useState([])
   const [signature, setSignature] = useState(null)
-  const fileRef = useRef(null)
   const [nowMs, setNowMs] = useState(Date.now())
   const [todaySched, setTodaySched] = useState([])
   const [showPicker, setShowPicker] = useState(false)
+  const [pending, setPending] = useState(null) // { locationId, scheduleId, name } — before-photos step
 
   // live "on site" clock — ticks every second while checked in
   useEffect(() => {
@@ -73,56 +112,47 @@ function CheckInTab() {
 
   useEffect(() => { load() }, [load])
 
-  const doCheckIn = async (locationId, scheduleId) => {
-    if (!locationId) return; setBusy(true); setMsg(null)
-    try {
-      const { lat, lng } = await getGeo()
-      const { data, error } = await supabase.from('visits').insert({
-        subcontractor_id: user.id, location_id: locationId,
-        check_in_at: new Date().toISOString(), check_in_lat: lat, check_in_lng: lng,
-        status: 'checked_in', notes: notes || null, manager_notified: true,
-        schedule_id: scheduleId || null,
-      }).select('*, locations(name, address, city, service_type)').single()
-      if (error) throw error
-      await supabase.from('notifications').insert({ visit_id: data.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_in' })
-      setActive(data); setLocId(''); setLocQuery(''); setNotes(''); setShowPicker(false)
-      setMsg({ ok: true, text: `Checked in at ${data.locations.name}` })
-    } catch (e) { setMsg({ ok: false, text: e.message }) }
-    setBusy(false)
+  // Step 1: choose a stop -> go to the "before photos" screen (clock not started yet)
+  const beginCheckIn = (locationId, scheduleId, name) => {
+    setPending({ locationId, scheduleId, name }); setBeforePhotos([]); setShowPicker(false); setMsg(null)
   }
-  // check in to a scheduled route stop (matches the schedule row to a location)
   const checkInStop = (job) => {
     const loc = locs.find(l => l.name.toLowerCase() === job.location_name.toLowerCase())
              || locs.find(l => l.name.toLowerCase().includes(job.location_name.toLowerCase()))
     if (!loc) { setMsg({ ok: false, text: `"${job.location_name}" isn't in Locations yet — use "Other location" or ask a manager to add it.` }); return }
-    doCheckIn(loc.id, job.id)
+    beginCheckIn(loc.id, job.id, loc.name)
   }
-  const checkInOther = () => { if (locId) doCheckIn(locId, null) }
+  const checkInOther = () => { const l = locs.find(x => x.id === locId); if (l) beginCheckIn(l.id, null, l.name) }
 
-  const handlePhoto = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhoto(file)
-    const reader = new FileReader()
-    reader.onload = (ev) => setPhotoPreview(ev.target.result)
-    reader.readAsDataURL(file)
+  // Step 2: start the job — clock starts, before photos upload
+  const startJob = async () => {
+    if (!pending) return; setBusy(true); setMsg(null)
+    try {
+      const { lat, lng } = await getGeo()
+      const { data, error } = await supabase.from('visits').insert({
+        subcontractor_id: user.id, location_id: pending.locationId,
+        check_in_at: new Date().toISOString(), check_in_lat: lat, check_in_lng: lng,
+        status: 'checked_in', notes: notes || null, manager_notified: true,
+        schedule_id: pending.scheduleId || null,
+      }).select('*, locations(name, address, city, service_type)').single()
+      if (error) throw error
+      if (beforePhotos.length) {
+        const urls = await uploadPhotos(data.id, beforePhotos, 'before')
+        if (urls.length) { await supabase.from('visits').update({ before_photos: urls }).eq('id', data.id); data.before_photos = urls }
+      }
+      await supabase.from('notifications').insert({ visit_id: data.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_in' })
+      setActive(data); setPending(null); setBeforePhotos([]); setLocId(''); setLocQuery(''); setNotes('')
+      setMsg({ ok: true, text: `Checked in at ${data.locations.name}` })
+    } catch (e) { setMsg({ ok: false, text: e.message }) }
+    setBusy(false)
   }
 
   const checkOut = async () => {
     if (!active) return; setBusy(true); setMsg(null)
     try {
       const { lat, lng } = await getGeo()
-      // Upload photo if exists
-      let photoUrl = null
-      if (photo) {
-        const ext = photo.name.split('.').pop()
-        const path = `visits/${active.id}/photo.${ext}`
-        const { error: upErr } = await supabase.storage.from('visit-photos').upload(path, photo, { upsert: true })
-        if (!upErr) {
-          const { data: urlData } = supabase.storage.from('visit-photos').getPublicUrl(path)
-          photoUrl = urlData?.publicUrl
-        }
-      }
+      // Upload "after" photos (up to 2)
+      const afterUrls = afterPhotos.length ? await uploadPhotos(active.id, afterPhotos, 'after') : []
       // Upload signature if exists
       let sigUrl = null
       if (signature) {
@@ -136,7 +166,7 @@ function CheckInTab() {
       }
       const { error } = await supabase.from('visits').update({
         check_out_at: new Date().toISOString(), check_out_lat: lat, check_out_lng: lng,
-        status: 'checked_out', photo_url: photoUrl, signature_url: sigUrl,
+        status: 'checked_out', after_photos: afterUrls, photo_url: afterUrls[0] || null, signature_url: sigUrl,
       }).eq('id', active.id)
       if (error) throw error
       // mark the route stop done (if this visit came from a scheduled job)
@@ -144,7 +174,7 @@ function CheckInTab() {
       await supabase.from('notifications').insert({ visit_id: active.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_out' })
       const d = dur(active.check_in_at, new Date().toISOString())
       setMsg({ ok: true, text: `Checked out — ${d} on site` })
-      setActive(null); setCheckoutMode(false); setPhoto(null); setPhotoPreview(null); setSignature(null)
+      setActive(null); setCheckoutMode(false); setAfterPhotos([]); setSignature(null)
       load()
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
@@ -184,17 +214,12 @@ function CheckInTab() {
         /* CHECKOUT FLOW */
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Checking out of {active.locations.name}</div>
-          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take a photo of the completed work and get the manager's signature below.</p>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Add up to 2 "after" photos of the finished work and get the manager's signature.</p>
 
-          {/* Photo */}
+          {/* After photos */}
           <div style={{ marginBottom: 18 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Work Photo</div>
-            <label className="photo-btn">
-              <Camera size={16} />
-              {photoPreview ? 'Change photo' : 'Take photo or upload'}
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} />
-            </label>
-            {photoPreview && <img src={photoPreview} className="photo-preview" alt="Work" />}
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 After Photos (up to 2)</div>
+            <PhotoPicker photos={afterPhotos} setPhotos={setAfterPhotos} max={2} />
           </div>
 
           {/* Signature */}
@@ -210,6 +235,25 @@ function CheckInTab() {
             </button>
           </div>
           <button className="btn btn-g btn-f" style={{ marginTop: 10 }} onClick={() => setCheckoutMode(false)}>← Go back</button>
+        </div>
+      ) : pending ? (
+        /* BEFORE PHOTOS — clock hasn't started yet */
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Starting: {pending.name}</div>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take 1–2 "before" photos of how the site looks now, then start the job. The clock begins when you check in.</p>
+          <div style={{ marginBottom: 18 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Before Photos (up to 2)</div>
+            <PhotoPicker photos={beforePhotos} setPhotos={setBeforePhotos} max={2} />
+          </div>
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label className="field-lbl">Notes (optional)</label>
+            <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+          <button className="big big-in" onClick={startJob} disabled={busy || beforePhotos.length === 0}>
+            {busy ? <span className="spin" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,.3)' }} /> : <><CheckCircle2 size={20} /> Start Job & Check In</>}
+          </button>
+          {beforePhotos.length === 0 && <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>Add at least one before photo to start</p>}
+          <button className="btn btn-g btn-f" style={{ marginTop: 10 }} onClick={() => { setPending(null); setBeforePhotos([]) }}>← Cancel</button>
         </div>
       ) : (
         /* DAILY ROUTE */
@@ -246,10 +290,6 @@ function CheckInTab() {
                     })}
                   </div>
                 )}
-                <div className="field" style={{ marginBottom: 10 }}>
-                  <label className="field-lbl">Notes (optional)</label>
-                  <input className="inp" placeholder="Issues, special conditions..." value={notes} onChange={e => setNotes(e.target.value)} />
-                </div>
                 {!showPicker ? (
                   <button type="button" className="btn btn-g btn-f" onClick={() => setShowPicker(true)}><MapPin size={14} /> Other location (not on route)</button>
                 ) : (

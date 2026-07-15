@@ -7,6 +7,9 @@ import Topbar from '../components/Topbar'
 
 const dur = (a, b) => { if (!a || !b) return '—'; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
 const mapUrl = (lat, lng) => (lat != null && lng != null) ? `https://www.google.com/maps?q=${lat},${lng}` : null
+const photoLinks = (arr, label) => (arr || []).map((u, i) => (
+  <a key={label + i} href={u} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /> {label}{arr.length > 1 ? ` ${i + 1}` : ''}</a>
+))
 function Bdg({ s }) {
   if (s === 'checked_in') return <span className="bdg bdg-g pulse">Active</span>
   if (s === 'checked_out') return <span className="bdg bdg-x">Done</span>
@@ -211,10 +214,12 @@ function CalendarView() {
                   <span className="mono">Out: {v.check_out_at ? format(new Date(v.check_out_at), 'h:mm a') : '—'}</span>
                   <span className="mono" style={{ color: 'var(--t2)' }}>{dur(v.check_in_at, v.check_out_at)}</span>
                 </div>
-                {(v.photo_url || v.signature_url || mapUrl(v.check_in_lat, v.check_in_lng)) && (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                {(v.photo_url || v.signature_url || v.before_photos?.length || v.after_photos?.length || mapUrl(v.check_in_lat, v.check_in_lng)) && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {mapUrl(v.check_in_lat, v.check_in_lng) && <a href={mapUrl(v.check_in_lat, v.check_in_lng)} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><MapPin size={11} /> GPS</a>}
-                    {v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Camera size={11} /> Photo</a>}
+                    {photoLinks(v.before_photos, 'Before')}
+                    {photoLinks(v.after_photos, 'After')}
+                    {!v.before_photos?.length && !v.after_photos?.length && v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Camera size={11} /> Photo</a>}
                     {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={11} /> Signature</a>}
                   </div>
                 )}
@@ -273,7 +278,9 @@ function AllVisits() {
               <td><Bdg s={v.status} /></td>
               <td style={{ whiteSpace: 'nowrap' }}>
                 {mapUrl(v.check_in_lat, v.check_in_lng) && <a href={mapUrl(v.check_in_lat, v.check_in_lng)} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }} title="Check-in GPS location"><MapPin size={10} /></a>}
-                {v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /></a>}
+                {photoLinks(v.before_photos, 'B')}
+                {photoLinks(v.after_photos, 'A')}
+                {!v.before_photos?.length && !v.after_photos?.length && v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /></a>}
                 {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={10} /></a>}
               </td>
               <td>{v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v, v.check_out_at ? 'checked_out' : 'checked_in')}>Unflag</button> : <button className="btn btn-d btn-sm" onClick={() => flag(v, 'flagged')}><Flag size={10} /></button>}</td>
