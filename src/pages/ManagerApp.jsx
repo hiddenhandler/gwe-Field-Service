@@ -424,7 +424,7 @@ function Leads() {
   const [sel, setSel] = useState(null), [props_, setProps] = useState([]), [cf, setCf] = useState({}), [savingCf, setSavingCf] = useState(false), [creating, setCreating] = useState(false), [copied, setCopied] = useState(null)
   const openLead = async (l) => {
     setSel(l)
-    setCf({ contact_person: l.contact_person || '', property_address: l.property_address || l.notes?.split(' · ')[0] || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
+    setCf({ contact_person: l.contact_person || '', property_address: l.property_address || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
     const { data } = await supabase.from('proposals').select('*').eq('lead_id', l.id).order('created_at', { ascending: false })
     setProps(data || [])
   }
