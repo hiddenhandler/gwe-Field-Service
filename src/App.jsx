@@ -4,6 +4,7 @@ import { useAuth } from './stores/auth'
 import Login from './pages/Login'
 import FieldApp from './pages/FieldApp'
 import ManagerApp from './pages/ManagerApp'
+import PublicProposal from './pages/Proposal'
 
 function Guard({ children, roles }) {
   const { user, profile, loading } = useAuth()
@@ -27,6 +28,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Public, no-auth proposal link the client opens & signs */}
+        <Route path="/p/:token" element={<PublicProposal />} />
         <Route path="/" element={<Guard><Root /></Guard>} />
         <Route path="/field/*" element={<Guard roles={['subcontractor']}><FieldApp /></Guard>} />
         <Route path="/manager/*" element={<Guard roles={['manager', 'viewer']}><ManagerApp /></Guard>} />

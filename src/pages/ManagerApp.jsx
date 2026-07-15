@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2 } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
+import { downloadProposalPptx } from '../lib/proposalPptx'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
@@ -419,6 +420,54 @@ function Leads() {
   const upd = async (id, patch) => { await supabase.from('leads').update(patch).eq('id', id); load() }
   const del = async (id) => { await supabase.from('leads').delete().eq('id', id); load() }
 
+  // ── customer info + proposals ──
+  const [sel, setSel] = useState(null), [props_, setProps] = useState([]), [cf, setCf] = useState({}), [savingCf, setSavingCf] = useState(false), [creating, setCreating] = useState(false), [copied, setCopied] = useState(null)
+  const openLead = async (l) => {
+    setSel(l)
+    setCf({ contact_person: l.contact_person || '', property_address: l.property_address || l.notes?.split(' · ')[0] || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
+    const { data } = await supabase.from('proposals').select('*').eq('lead_id', l.id).order('created_at', { ascending: false })
+    setProps(data || [])
+  }
+  const saveCf = async () => {
+    setSavingCf(true)
+    await supabase.from('leads').update({ ...cf, monthly_price: cf.monthly_price === '' ? null : Number(cf.monthly_price) }).eq('id', sel.id)
+    const { data } = await supabase.from('leads').select('*').eq('id', sel.id).single()
+    if (data) setSel(data)
+    setSavingCf(false); load()
+  }
+  const createProposal = async () => {
+    setCreating(true)
+    const { data, error } = await supabase.from('proposals').insert({
+      lead_id: sel.id, service_type: cf.service_type || 'Janitorial',
+      title: `Proposal for ${cf.service_type || 'Janitorial'} Services`,
+      client_name: sel.name, company: sel.company, contact_person: cf.contact_person || sel.name,
+      phone: sel.phone, email: sel.email, property_address: cf.property_address,
+      square_footage: cf.square_footage, building_type: cf.building_type,
+      service_frequency: cf.service_frequency, monthly_price: cf.monthly_price === '' ? null : Number(cf.monthly_price),
+      status: 'draft',
+    }).select().single()
+    setCreating(false)
+    if (!error && data) setProps(p => [data, ...p])
+  }
+  const [converting, setConverting] = useState(false)
+  const convertToCustomer = async () => {
+    if (!window.confirm(`Convert ${sel.name} to a customer? This marks the lead Won and adds it as a serviceable Location.`)) return
+    setConverting(true)
+    await supabase.from('leads').update({ ...cf, is_job: true, status: 'won', monthly_price: cf.monthly_price === '' ? null : Number(cf.monthly_price) }).eq('id', sel.id)
+    const locName = sel.company || sel.name
+    const { data: ex } = await supabase.from('locations').select('id').eq('name', locName).limit(1)
+    if (!ex || ex.length === 0) {
+      await supabase.from('locations').insert({ name: locName, address: cf.property_address || '', city: '', service_type: cf.service_type || 'Janitorial', frequency: cf.service_frequency || '', subcontractor: '', phone: sel.phone || '', active: true })
+    }
+    const { data } = await supabase.from('leads').select('*').eq('id', sel.id).single()
+    if (data) { setSel(data); setCf(c => ({ ...c, is_job: true })) }
+    setConverting(false); load()
+  }
+  const propLink = (p) => `${window.location.origin}/p/${p.share_token}`
+  const copyLink = (p) => { try { navigator.clipboard.writeText(propLink(p)) } catch {} setCopied(p.id); setTimeout(() => setCopied(null), 1500) }
+  const emailLink = (p) => `mailto:${sel.email || ''}?subject=${encodeURIComponent('Your Great Way Environmental Proposal')}&body=${encodeURIComponent(`Hi ${sel.contact_person || sel.name || ''},\n\nHere is your proposal from Great Way Environmental. You can review and sign it online:\n${propLink(p)}\n\nThank you,\nGreat Way Environmental\n(707) 718-3492`)}`
+  const delProp = async (p) => { await supabase.from('proposals').delete().eq('id', p.id); setProps(ps => ps.filter(x => x.id !== p.id)) }
+
   const shown = filter === 'all' ? leads : leads.filter(l => l.status === filter)
   const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: leads.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -446,11 +495,46 @@ function Leads() {
           <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Lead'}</button>
         </form>
       </div>}
+      {sel && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
+            <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
+          </div>
+          <div className="fg2" style={{ marginBottom: 12 }}>
+            {[['contact_person', 'Contact Person'], ['property_address', 'Property Address'], ['square_footage', 'Square Footage'], ['building_type', 'Building Type'], ['service_frequency', 'Service Frequency (e.g. 3x/week)']].map(([k, lb]) =>
+              <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
+            <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={cf.service_type} onChange={e => setCf({ ...cf, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Residential Turnover</option></select></div>
+            <div className="field"><label className="field-lbl">Monthly Price ($)</label><input className="inp" type="number" value={cf.monthly_price} onChange={e => setCf({ ...cf, monthly_price: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">Job / Location</label><button type="button" className={`btn btn-sm ${cf.is_job ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, is_job: !cf.is_job })}>{cf.is_job ? '✓ Active Job/Location' : 'Turn on as Job/Location'}</button></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
+            <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>
+            <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>
+          </div>
+          {props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
+            {props_.map(p => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
+                <div><b>{p.monthly_price ? `$${p.monthly_price}/mo` : 'No price'}</b> · <span className={`bdg ${p.status === 'accepted' ? 'bdg-g' : 'bdg-x'}`}>{p.status}</span>{p.accepted_name ? ` · signed by ${p.accepted_name}` : ''}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <a className="btn btn-g btn-sm" href={propLink(p)} target="_blank" rel="noreferrer">Open</a>
+                  <button className="btn btn-g btn-sm" onClick={() => copyLink(p)}>{copied === p.id ? 'Copied!' : 'Copy link'}</button>
+                  <a className="btn btn-g btn-sm" href={emailLink(p)}>Email</a>
+                  <button className="btn btn-g btn-sm" onClick={() => downloadProposalPptx(p)}>PPTX</button>
+                  <button className="btn btn-d btn-sm" onClick={() => delProp(p)}><Trash2 size={11} /></button>
+                </div>
+              </div>
+            ))}
+          </div>}
+        </div>
+      )}
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No leads{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
           <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Notes</th><th></th></tr></thead><tbody>
             {shown.map(l => <tr key={l.id} style={dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}}>
-              <td><div style={{ fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</div></td>
+              <td><button type="button" onClick={() => openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</div></button></td>
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
