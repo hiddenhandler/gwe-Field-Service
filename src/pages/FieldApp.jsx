@@ -112,13 +112,17 @@ function CheckInTab() {
 
   useEffect(() => { load() }, [load])
 
+  // Only show locations for this crew's service line (Janitorial vs Landscaping).
+  // Blank service_type on the profile = sees everything.
+  const visibleLocs = locs.filter(l => !profile?.service_type || l.service_type === profile.service_type)
+
   // Step 1: choose a stop -> go to the "before photos" screen (clock not started yet)
   const beginCheckIn = (locationId, scheduleId, name) => {
     setPending({ locationId, scheduleId, name }); setBeforePhotos([]); setShowPicker(false); setMsg(null)
   }
   const checkInStop = (job) => {
-    const loc = locs.find(l => l.name.toLowerCase() === job.location_name.toLowerCase())
-             || locs.find(l => l.name.toLowerCase().includes(job.location_name.toLowerCase()))
+    const loc = visibleLocs.find(l => l.name.toLowerCase() === job.location_name.toLowerCase())
+             || visibleLocs.find(l => l.name.toLowerCase().includes(job.location_name.toLowerCase()))
     if (!loc) { setMsg({ ok: false, text: `"${job.location_name}" isn't in Locations yet — use "Other location" or ask a manager to add it.` }); return }
     beginCheckIn(loc.id, job.id, loc.name)
   }
@@ -272,10 +276,12 @@ function CheckInTab() {
         <div className="card" style={{ marginBottom: 16 }}>
           {(() => {
             const first = profile?.full_name?.split(' ')[0]?.toLowerCase() || ''
-            const mine = todaySched.filter(j => (j.subcontractor || '').toLowerCase().includes(first))
-            const route = mine.length ? mine : todaySched
+            const svc = profile?.service_type // Janitorial / Landscaping — null = sees all
+            const pool = todaySched.filter(j => !svc || j.service_type === svc)
+            const mine = pool.filter(j => (j.subcontractor || '').toLowerCase().includes(first))
+            const route = mine.length ? mine : pool
             const doneCount = route.filter(j => j.status === 'completed').length
-            const locFor = (name) => locs.find(l => l.name.toLowerCase() === name.toLowerCase()) || locs.find(l => l.name.toLowerCase().includes(name.toLowerCase()))
+            const locFor = (name) => visibleLocs.find(l => l.name.toLowerCase() === name.toLowerCase()) || visibleLocs.find(l => l.name.toLowerCase().includes(name.toLowerCase()))
             return (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -309,7 +315,7 @@ function CheckInTab() {
                     <div className="field">
                       <label className="field-lbl">Other location</label>
                       {(() => {
-                        const sel = locs.find(l => l.id === locId)
+                        const sel = visibleLocs.find(l => l.id === locId)
                         if (sel) return (
                           <button type="button" className="loc-selected" onClick={() => setLocId('')}>
                             <div><div className="loc-name">{sel.name}</div><div className="loc-street">{street(sel.address)}</div></div>
@@ -317,7 +323,7 @@ function CheckInTab() {
                           </button>
                         )
                         const q = locQuery.trim().toLowerCase()
-                        const filtered = q ? locs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : locs
+                        const filtered = q ? visibleLocs.filter(l => (l.name + ' ' + (l.address || '')).toLowerCase().includes(q)) : visibleLocs
                         return (
                           <>
                             <input className="inp" placeholder="Search by name or street…" value={locQuery} onChange={e => setLocQuery(e.target.value)} />
@@ -413,7 +419,10 @@ function ScheduleTab() {
 
   if (loading) return <div className="loader"><div className="spin spin-lg" /></div>
 
-  const shown = mineOnly ? jobs.filter(j => (j.subcontractor || '').toLowerCase().includes(firstName)) : jobs
+  // scope to this crew's service line so Janitorial/Landscaping never mix
+  const svc = profile?.service_type
+  const scoped = jobs.filter(j => !svc || j.service_type === svc)
+  const shown = mineOnly ? scoped.filter(j => (j.subcontractor || '').toLowerCase().includes(firstName)) : scoped
   // group by date
   const groups = {}
   shown.forEach(j => { (groups[j.service_date] = groups[j.service_date] || []).push(j) })
