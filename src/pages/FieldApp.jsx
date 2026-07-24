@@ -173,9 +173,11 @@ function CheckInTab() {
           sigUrl = urlData?.publicUrl
         }
       }
+      const combinedNotes = [active.notes, notes.trim()].filter(Boolean).join('  •  ') || null
       const { error } = await supabase.from('visits').update({
         check_out_at: new Date().toISOString(), check_out_lat: lat, check_out_lng: lng,
         status: 'checked_out', after_photos: afterUrls, photo_url: afterUrls[0] || null, signature_url: sigUrl,
+        notes: combinedNotes,
       }).eq('id', active.id)
       if (error) throw error
       // mark the route stop done (if this visit came from a scheduled job)
@@ -183,7 +185,7 @@ function CheckInTab() {
       await supabase.from('notifications').insert({ visit_id: active.id, sent_to: import.meta.env.VITE_MANAGER_EMAIL || 'che@greatwaye.com', type: 'check_out' })
       const d = dur(active.check_in_at, new Date().toISOString())
       setMsg({ ok: true, text: `Checked out — ${d} on site` })
-      setActive(null); setCheckoutMode(false); setAfterPhotos([]); setSignature(null)
+      setActive(null); setCheckoutMode(false); setAfterPhotos([]); setSignature(null); setNotes('')
       load()
     } catch (e) { setMsg({ ok: false, text: e.message }) }
     setBusy(false)
@@ -223,12 +225,18 @@ function CheckInTab() {
         /* CHECKOUT FLOW */
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Checking out of {active.locations.name}</div>
-          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Add up to 5 "after" photos of the finished work and get the manager's signature.</p>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Add up to 10 "after" photos of the finished work and get the manager's signature.</p>
 
           {/* After photos */}
           <div style={{ marginBottom: 18 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>📷 After Photos (up to 5)</div>
-            <PhotoPicker photos={afterPhotos} setPhotos={setAfterPhotos} max={5} />
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 After Photos (up to 10)</div>
+            <PhotoPicker photos={afterPhotos} setPhotos={setAfterPhotos} max={10} />
+          </div>
+
+          {/* End-of-job notes */}
+          <div style={{ marginBottom: 18 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>📝 End-of-Job Notes (optional)</div>
+            <textarea className="inp" rows={3} style={{ resize: 'vertical' }} placeholder="Anything you noticed — damage, low supplies, issues to flag…" value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
 
           {/* Signature */}
@@ -256,10 +264,10 @@ function CheckInTab() {
         /* BEFORE PHOTOS — clock hasn't started yet */
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Starting: {pending.name}</div>
-          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take "before" photos of how the site looks now (up to 5), then start the job. The clock begins when you check in.</p>
+          <p style={{ color: 'var(--t2)', fontSize: 12, marginBottom: 18 }}>Take "before" photos of how the site looks now (up to 10), then start the job. The clock begins when you check in.</p>
           <div style={{ marginBottom: 18 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Before Photos (up to 5)</div>
-            <PhotoPicker photos={beforePhotos} setPhotos={setBeforePhotos} max={5} />
+            <div className="sec-t" style={{ marginBottom: 8 }}>📷 Before Photos (up to 10)</div>
+            <PhotoPicker photos={beforePhotos} setPhotos={setBeforePhotos} max={10} />
           </div>
           <div className="field" style={{ marginBottom: 14 }}>
             <label className="field-lbl">Notes (optional)</label>
