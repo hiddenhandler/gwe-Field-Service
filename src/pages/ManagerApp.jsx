@@ -336,7 +336,7 @@ function Locations() {
 
   return (
     <div className="pg">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>Locations</h1><button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add</>}</button></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h1 style={{ fontSize: 22, fontWeight: 800 }}>Customers</h1><button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add</>}</button></div>
       {add && <div className="card" style={{ marginBottom: 16 }}><div style={{ fontWeight: 700, marginBottom: 14 }}>New Location</div><form onSubmit={save}>
         <div className="fg2" style={{ marginBottom: 14 }}>
           {[['name', 'Name', true], ['address', 'Address'], ['city', 'City, State'], ['phone', 'Phone'], ['subcontractor', 'Subcontractor']].map(([k, l, r]) => <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}
@@ -430,7 +430,8 @@ function Leads() {
   const [sel, setSel] = useState(null), [props_, setProps] = useState([]), [cf, setCf] = useState({}), [savingCf, setSavingCf] = useState(false), [creating, setCreating] = useState(false), [copied, setCopied] = useState(null)
   const openLead = async (l) => {
     setSel(l)
-    setCf({ contact_person: l.contact_person || '', property_address: l.property_address || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
+    setCf({ contact_person: l.contact_person || '', phone: l.phone || '', email: l.email || '', property_address: l.property_address || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
+    setCrewMsg('')
     const { data } = await supabase.from('proposals').select('*').eq('lead_id', l.id).order('created_at', { ascending: false })
     setProps(data || [])
   }
@@ -467,6 +468,20 @@ function Leads() {
     }
     const { data } = await supabase.from('leads').select('*').eq('id', sel.id).single()
     if (data) { setSel(data); setCf(c => ({ ...c, is_job: true })) }
+    setConverting(false); load()
+  }
+  const [crewMsg, setCrewMsg] = useState('')
+  const convertToCrew = async () => {
+    setCrewMsg('')
+    if (!sel.email) { setCrewMsg('No email on file for this cleaner — add one (Save Info) before creating a login.'); return }
+    const pw = 'GWE-' + Math.random().toString(36).slice(2, 7) + '!'
+    if (!window.confirm(`Create a Crew login for ${sel.name} and mark the lead Won?`)) return
+    setConverting(true)
+    const { data, error } = await createUserAccount({ email: sel.email, password: pw, full_name: sel.company || sel.name, role: 'subcontractor', phone: sel.phone || '' })
+    if (error) { setCrewMsg(error.message); setConverting(false); return }
+    await supabase.from('leads').update({ status: 'won' }).eq('id', sel.id)
+    if (data?.user?.id) setTimeout(() => supabase.rpc('set_user_service', { target: data.user.id, svc: 'Janitorial' }), 1500)
+    setCrewMsg(`✅ Crew account created — login: ${sel.email} / ${pw}  (service line set to Janitorial)`)
     setConverting(false); load()
   }
   const propLink = (p) => `${window.location.origin}/p/${p.share_token}`
@@ -513,33 +528,49 @@ function Leads() {
             <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
             <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
           </div>
-          <div className="fg2" style={{ marginBottom: 12 }}>
-            {[['contact_person', 'Contact Person'], ['property_address', 'Property Address'], ['square_footage', 'Square Footage'], ['building_type', 'Building Type'], ['service_frequency', 'Service Frequency (e.g. 3x/week)']].map(([k, lb]) =>
-              <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
-            <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={cf.service_type} onChange={e => setCf({ ...cf, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Residential Turnover</option></select></div>
-            <div className="field"><label className="field-lbl">Monthly Price ($)</label><input className="inp" type="number" value={cf.monthly_price} onChange={e => setCf({ ...cf, monthly_price: e.target.value })} /></div>
-            <div className="field"><label className="field-lbl">Job / Location</label><button type="button" className={`btn btn-sm ${cf.is_job ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, is_job: !cf.is_job })}>{cf.is_job ? '✓ Active Job/Location' : 'Turn on as Job/Location'}</button></div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
-            <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>
-            <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>
-          </div>
-          {props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
-            <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
-            {props_.map(p => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
-                <div><b>{p.monthly_price ? `$${p.monthly_price}/mo` : 'No price'}</b> · <span className={`bdg ${p.status === 'accepted' ? 'bdg-g' : 'bdg-x'}`}>{p.status}</span>{p.accepted_name ? ` · signed by ${p.accepted_name}` : ''}</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <a className="btn btn-g btn-sm" href={propLink(p)} target="_blank" rel="noreferrer">Open</a>
-                  <button className="btn btn-g btn-sm" onClick={() => copyLink(p)}>{copied === p.id ? 'Copied!' : 'Copy link'}</button>
-                  <a className="btn btn-g btn-sm" href={emailLink(p)}>Email</a>
-                  <button className="btn btn-g btn-sm" onClick={() => downloadProposalPptx(p)}>PPTX</button>
-                  <button className="btn btn-d btn-sm" onClick={() => delProp(p)}><Trash2 size={11} /></button>
-                </div>
+          {sel.lead_type === 'cleaner' ? (
+            <>
+              <div className="fg2" style={{ marginBottom: 12 }}>
+                {[['contact_person', 'Contact / Owner'], ['phone', 'Phone'], ['email', 'Email (needed for login)']].map(([k, lb]) =>
+                  <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
               </div>
-            ))}
-          </div>}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
+                <button className="btn btn-p btn-sm" onClick={convertToCrew} disabled={converting}>{converting ? 'Creating…' : '★ Convert to Crew'}</button>
+              </div>
+              {crewMsg && <div className="alrt alrt-ok" style={{ marginTop: 12, wordBreak: 'break-word' }}><CheckCircle2 size={14} />{crewMsg}</div>}
+            </>
+          ) : (
+            <>
+              <div className="fg2" style={{ marginBottom: 12 }}>
+                {[['contact_person', 'Contact Person'], ['property_address', 'Property Address'], ['square_footage', 'Square Footage'], ['building_type', 'Building Type'], ['service_frequency', 'Service Frequency (e.g. 3x/week)']].map(([k, lb]) =>
+                  <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
+                <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={cf.service_type} onChange={e => setCf({ ...cf, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Residential Turnover</option></select></div>
+                <div className="field"><label className="field-lbl">Monthly Price ($)</label><input className="inp" type="number" value={cf.monthly_price} onChange={e => setCf({ ...cf, monthly_price: e.target.value })} /></div>
+                <div className="field"><label className="field-lbl">Customer</label><button type="button" className={`btn btn-sm ${cf.is_job ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, is_job: !cf.is_job })}>{cf.is_job ? '✓ Active Customer/Site' : 'Mark as Customer/Site'}</button></div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
+                <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>
+                <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>
+              </div>
+              {props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
+                <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
+                {props_.map(p => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
+                    <div><b>{p.monthly_price ? `$${p.monthly_price}/mo` : 'No price'}</b> · <span className={`bdg ${p.status === 'accepted' ? 'bdg-g' : 'bdg-x'}`}>{p.status}</span>{p.accepted_name ? ` · signed by ${p.accepted_name}` : ''}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <a className="btn btn-g btn-sm" href={propLink(p)} target="_blank" rel="noreferrer">Open</a>
+                      <button className="btn btn-g btn-sm" onClick={() => copyLink(p)}>{copied === p.id ? 'Copied!' : 'Copy link'}</button>
+                      <a className="btn btn-g btn-sm" href={emailLink(p)}>Email</a>
+                      <button className="btn btn-g btn-sm" onClick={() => downloadProposalPptx(p)}>PPTX</button>
+                      <button className="btn btn-d btn-sm" onClick={() => delProp(p)}><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>}
+            </>
+          )}
         </div>
       )}
       <div className="card card-f">
@@ -635,7 +666,7 @@ export default function ManagerApp() {
     { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={16} /> },
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
-    { id: 'locs', label: 'Locations', icon: <MapPin size={16} /> },
+    { id: 'locs', label: 'Customers', icon: <MapPin size={16} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={16} /> },
     { id: 'bids', label: 'Bids', icon: <FileText size={16} /> },
     { id: 'crew', label: 'Accounts', icon: <Users size={16} /> },
@@ -646,7 +677,7 @@ export default function ManagerApp() {
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={20} /> },
     { id: 'bids', label: 'Bids', icon: <FileText size={20} /> },
-    { id: 'locs', label: 'Sites', icon: <MapPin size={20} /> },
+    { id: 'locs', label: 'Customers', icon: <MapPin size={20} /> },
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
   // Viewers get read-only access: no Locations / Leads / Crew management
