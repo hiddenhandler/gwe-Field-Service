@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2 } from 'lucide-react'
+import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2, FileText } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
 import { downloadProposalPptx } from '../lib/proposalPptx'
@@ -417,11 +417,12 @@ const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s
 function Leads() {
   const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
+  const [leadType, setLeadType] = useState('customer')  // customer | cleaner
   const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
   const [f, setF] = useState(blank)
   const load = async () => { const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false }); setLeads(data || []); setBusy(false) }
   useEffect(() => { load() }, [])
-  const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('leads').insert({ ...f, status: 'new' }); setF(blank); setAdd(false); setSaving(false); load() }
+  const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('leads').insert({ ...f, status: 'new', lead_type: leadType }); setF(blank); setAdd(false); setSaving(false); load() }
   const upd = async (id, patch) => { await supabase.from('leads').update(patch).eq('id', id); load() }
   const del = async (id) => { await supabase.from('leads').delete().eq('id', id); load() }
 
@@ -473,8 +474,9 @@ function Leads() {
   const emailLink = (p) => `mailto:${sel.email || ''}?subject=${encodeURIComponent('Your Great Way Environmental Proposal')}&body=${encodeURIComponent(`Hi ${sel.contact_person || sel.name || ''},\n\nHere is your proposal from Great Way Environmental. You can review and sign it online:\n${propLink(p)}\n\nThank you,\nGreat Way Environmental\n(707) 718-3492`)}`
   const delProp = async (p) => { await supabase.from('proposals').delete().eq('id', p.id); setProps(ps => ps.filter(x => x.id !== p.id)) }
 
-  const shown = filter === 'all' ? leads : leads.filter(l => l.status === filter)
-  const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: leads.filter(l => l.status === s).length }), {})
+  const typed = leads.filter(l => (l.lead_type || 'customer') === leadType)
+  const shown = filter === 'all' ? typed : typed.filter(l => l.status === filter)
+  const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: typed.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const dueSoon = (l) => l.status === 'contacted' && l.callback_date && l.callback_date <= todayStr
 
@@ -482,7 +484,12 @@ function Leads() {
     <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
-        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Lead</>}</button>
+        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Cleaner' : 'Customer'}</>}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {[['customer', 'Customers'], ['cleaner', 'Cleaners']].map(([v, lb]) => (
+          <button key={v} className={`btn btn-sm ${leadType === v ? 'btn-p' : 'btn-g'}`} style={{ flex: 1 }} onClick={() => { setLeadType(v); setSel(null); setFilter('all') }}>{lb} ({leads.filter(l => (l.lead_type || 'customer') === v).length})</button>
+        ))}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {['all', ...LEAD_STATUS].map(s => (
@@ -552,6 +559,73 @@ function Leads() {
   )
 }
 
+/* ═══ BID TRACKER (manager only) ═══ */
+const BID_STATUS = ['prospect', 'submitted', 'won', 'lost']
+function Bids() {
+  const [bids, setBids] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
+  const blank = { project: '', client: '', city: '', service_type: 'Janitorial', amount: '', due_date: '', contact: '', notes: '' }
+  const [f, setF] = useState(blank)
+  const load = async () => { const { data } = await supabase.from('bids').select('*').order('due_date', { ascending: true, nullsFirst: false }); setBids(data || []); setBusy(false) }
+  useEffect(() => { load() }, [])
+  const save = async e => {
+    e.preventDefault(); setSaving(true)
+    await supabase.from('bids').insert({ ...f, amount: f.amount === '' ? null : Number(f.amount), due_date: f.due_date || null, status: 'prospect' })
+    setF(blank); setAdd(false); setSaving(false); load()
+  }
+  const upd = async (id, patch) => { await supabase.from('bids').update(patch).eq('id', id); load() }
+  const del = async (id) => { if (!window.confirm('Delete this bid?')) return; await supabase.from('bids').delete().eq('id', id); load() }
+
+  const shown = filter === 'all' ? bids : bids.filter(b => b.status === filter)
+  const counts = BID_STATUS.reduce((a, s) => ({ ...a, [s]: bids.filter(b => b.status === s).length }), {})
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const dueSoon = (b) => b.status !== 'won' && b.status !== 'lost' && b.due_date && b.due_date <= format(addMonths(new Date(), 0), 'yyyy-MM-dd')
+  const overdue = (b) => b.status === 'prospect' && b.due_date && b.due_date < todayStr
+
+  return (
+    <div className="pg">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Bid Tracker</h1>
+        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Bid</>}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {['all', ...BID_STATUS].map(s => (
+          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-p' : 'btn-g'}`} onClick={() => setFilter(s)}>{cap(s)}{s !== 'all' ? ` (${counts[s] || 0})` : ''}</button>
+        ))}
+      </div>
+      {add && <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 14 }}>New Bid</div>
+        <form onSubmit={save}>
+          <div className="fg2" style={{ marginBottom: 14 }}>
+            <div className="field"><label className="field-lbl">Project / RFP</label><input className="inp" value={f.project} onChange={e => setF({ ...f, project: e.target.value })} required /></div>
+            <div className="field"><label className="field-lbl">Client / Agency</label><input className="inp" value={f.client} onChange={e => setF({ ...f, client: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">City</label><input className="inp" value={f.city} onChange={e => setF({ ...f, city: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={f.service_type} onChange={e => setF({ ...f, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Other</option></select></div>
+            <div className="field"><label className="field-lbl">Bid Amount ($)</label><input className="inp" type="number" value={f.amount} onChange={e => setF({ ...f, amount: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">Due / Reminder Date</label><input className="inp" type="date" value={f.due_date} onChange={e => setF({ ...f, due_date: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">Contact</label><input className="inp" value={f.contact} onChange={e => setF({ ...f, contact: e.target.value })} /></div>
+          </div>
+          <div className="field" style={{ marginBottom: 14 }}><label className="field-lbl">Notes</label><input className="inp" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+          <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Bid'}</button>
+        </form>
+      </div>}
+      <div className="card card-f">
+        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><FileText size={24} /><p>No bids{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
+          <div className="tw"><table><thead><tr><th>Project</th><th>Client</th><th>Amount</th><th>Status</th><th>Due</th><th>Notes</th><th></th></tr></thead><tbody>
+            {shown.map(b => <tr key={b.id} style={overdue(b) ? { background: 'rgba(224,82,82,.07)' } : {}}>
+              <td><div style={{ fontWeight: 600 }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.service_type}{b.city ? ` · ${b.city}` : ''}</div></td>
+              <td style={{ fontSize: 12 }}>{b.client}{b.contact ? <div style={{ color: 'var(--t3)' }}>{b.contact}</div> : ''}</td>
+              <td className="mono" style={{ fontSize: 12 }}>{b.amount != null ? `$${Number(b.amount).toLocaleString()}` : '—'}</td>
+              <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.status} onChange={e => upd(b.id, { status: e.target.value, ...(e.target.value === 'submitted' && !b.submitted_date ? { submitted_date: todayStr } : {}) })}>{BID_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
+              <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.due_date || ''} onChange={e => upd(b.id, { due_date: e.target.value || null })} />{overdue(b) && <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 2 }}>overdue</div>}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{b.notes}</td>
+              <td><button className="btn btn-d btn-sm" onClick={() => del(b.id)}><Trash2 size={11} /></button></td>
+            </tr>)}
+          </tbody></table></div>}
+      </div>
+    </div>
+  )
+}
+
 /* ═══ MAIN ═══ */
 export default function ManagerApp() {
   const { profile } = useAuth()
@@ -563,6 +637,7 @@ export default function ManagerApp() {
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Locations', icon: <MapPin size={16} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={16} /> },
+    { id: 'bids', label: 'Bids', icon: <FileText size={16} /> },
     { id: 'crew', label: 'Accounts', icon: <Users size={16} /> },
   ]
   const allMobile = [
@@ -570,12 +645,13 @@ export default function ManagerApp() {
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={20} /> },
+    { id: 'bids', label: 'Bids', icon: <FileText size={20} /> },
     { id: 'locs', label: 'Sites', icon: <MapPin size={20} /> },
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
   // Viewers get read-only access: no Locations / Leads / Crew management
-  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'leads', 'crew'].includes(i.id)) : allMenu
-  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'leads', 'crew'].includes(i.id)) : allMobile
+  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'leads', 'bids', 'crew'].includes(i.id)) : allMenu
+  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'leads', 'bids', 'crew'].includes(i.id)) : allMobile
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -591,6 +667,7 @@ export default function ManagerApp() {
           {tab === 'visits' && <AllVisits />}
           {tab === 'locs' && !isViewer && <Locations />}
           {tab === 'leads' && !isViewer && <Leads />}
+          {tab === 'bids' && !isViewer && <Bids />}
           {tab === 'crew' && !isViewer && <Crew />}
         </main>
       </div>
