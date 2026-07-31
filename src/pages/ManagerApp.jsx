@@ -652,7 +652,9 @@ function Bids() {
   const upd = async (id, patch) => { await supabase.from('bids').update(patch).eq('id', id); load() }
   const del = async (id) => { if (!window.confirm('Delete this bid?')) return; await supabase.from('bids').delete().eq('id', id); load() }
 
-  const [selBid, setSelBid] = useState(null), [copiedEmail, setCopiedEmail] = useState(false)
+  const [selBid, setSelBid] = useState(null), [copiedEmail, setCopiedEmail] = useState(false), [showEmail, setShowEmail] = useState(false)
+  const emailFor = (b) => b.intent_email || `Subject: GWE - Intent to Bid, ${b.solicitation_no || ''} ${b.project}\n\nHi ${(b.contact_name || '').split(' ')[0] || 'there'},\n\nGreat Way Environmental is a licensed, insured commercial janitorial contractor. We're reviewing ${b.solicitation_no || ''} - ${b.project}${b.issuer ? ` (${b.issuer}` : ''}${b.due_date ? `, closing ${b.due_date})` : b.issuer ? ')' : ''} and want to make sure our submission is complete.\n\nCould you confirm the walkthrough/registration steps and the required insurance & bond limits?\n\nAppreciate it,\nFernando Gonzalez\nGreat Way Environmental\n(707) 718-3492`
+  const openBid = (b) => { setSelBid(b); setShowEmail(false) }
   const shown = filter === 'all' ? bids : bids.filter(b => b.status === filter)
   const counts = BID_STATUS.reduce((a, s) => ({ ...a, [s]: bids.filter(b => b.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -689,7 +691,6 @@ function Bids() {
       </div>}
       {selBid && (() => {
         const b = selBid
-        const mail = b.intent_email ? `mailto:${b.contact_email || ''}?subject=${encodeURIComponent((b.intent_email.split('\n')[0] || '').replace(/^Subject:\s*/, ''))}&body=${encodeURIComponent(b.intent_email.split('\n').slice(2).join('\n'))}` : null
         return (
           <div className="card" style={{ marginBottom: 16, borderColor: b.gate === 'PASS' ? 'var(--g-edge)' : 'var(--bd2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -713,19 +714,25 @@ function Bids() {
             </div>
             {b.steps_apply && <div style={{ marginBottom: 10 }}><div className="sec-t" style={{ marginBottom: 4 }}>Step-by-step — Apply / Submit</div><div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6 }}>{b.steps_apply}</div></div>}
             {b.steps_walk && <div style={{ marginBottom: 12 }}><div className="sec-t" style={{ marginBottom: 4 }}>Step-by-step — Confirm Walkthrough</div><div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6 }}>{b.steps_walk}</div></div>}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: b.intent_email ? 12 : 0 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {b.portal_link && <a className="btn btn-p btn-sm" href={b.portal_link} target="_blank" rel="noreferrer"><FileText size={11} /> Open Portal</a>}
-              {b.contact_email && <a className="btn btn-g btn-sm" href={`mailto:${b.contact_email}`}>Email Contact</a>}
+              <button className="btn btn-g btn-sm" onClick={() => setShowEmail(v => !v)}>✉ {showEmail ? 'Hide Email' : 'Email Template'}</button>
               {b.contact_phone && <a className="btn btn-g btn-sm" href={`tel:${b.contact_phone}`}><Phone size={11} /> Call</a>}
             </div>
-            {b.intent_email && <div>
-              <div className="sec-t" style={{ marginBottom: 6 }}>Intent-to-Bid Email</div>
-              <textarea className="inp" readOnly rows={8} style={{ fontSize: 12, resize: 'vertical' }} value={b.intent_email} />
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className="btn btn-g btn-sm" onClick={() => { try { navigator.clipboard.writeText(b.intent_email) } catch { } setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 1500) }}>{copiedEmail ? 'Copied!' : 'Copy email'}</button>
-                {mail && <a className="btn btn-p btn-sm" href={mail}>Open in Mail</a>}
-              </div>
-            </div>}
+            {showEmail && (() => {
+              const txt = emailFor(b)
+              const mail = `mailto:${b.contact_email || ''}?subject=${encodeURIComponent((txt.split('\n')[0] || '').replace(/^Subject:\s*/, ''))}&body=${encodeURIComponent(txt.split('\n').slice(2).join('\n'))}`
+              return (
+                <div style={{ marginTop: 12 }}>
+                  <div className="sec-t" style={{ marginBottom: 6 }}>Intent-to-Bid Email {b.intent_email ? '' : '(auto-drafted)'}</div>
+                  <textarea className="inp" rows={9} style={{ fontSize: 12, resize: 'vertical' }} defaultValue={txt} id={`bidmail-${b.id}`} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="btn btn-g btn-sm" onClick={() => { const el = document.getElementById(`bidmail-${b.id}`); const v = el ? el.value : txt; try { navigator.clipboard.writeText(v) } catch { } setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 1500) }}>{copiedEmail ? 'Copied!' : 'Copy email'}</button>
+                    {b.contact_email && <a className="btn btn-p btn-sm" href={mail}>Open in Mail</a>}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )
       })()}
@@ -733,7 +740,7 @@ function Bids() {
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><FileText size={24} /><p>No bids{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
           <div className="tw"><table><thead><tr><th>Project</th><th>Client</th><th>Amount</th><th>Status</th><th>Due</th><th>Notes</th><th></th></tr></thead><tbody>
             {shown.map(b => <tr key={b.id} style={overdue(b) ? { background: 'rgba(224,82,82,.07)' } : walkSoon(b) ? { background: 'rgba(212,160,23,.06)' } : {}}>
-              <td><button type="button" onClick={() => setSelBid(b)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{b.gate}</span>}{b.city || b.county}{b.solicitation_no ? ` · ${b.solicitation_no}` : ''}</div></button></td>
+              <td><button type="button" onClick={() => openBid(b)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{b.gate}</span>}{b.city || b.county}{b.solicitation_no ? ` · ${b.solicitation_no}` : ''}</div></button></td>
               <td style={{ fontSize: 12 }}>{b.client || b.issuer}{b.walkthrough_date ? <div style={{ color: walkSoon(b) ? 'var(--yellow)' : 'var(--t3)' }}>walk {b.walkthrough_date}</div> : ''}</td>
               <td className="mono" style={{ fontSize: 12 }}>{b.amount != null ? `$${Number(b.amount).toLocaleString()}` : '—'}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.status} onChange={e => upd(b.id, { status: e.target.value, ...(e.target.value === 'submitted' && !b.submitted_date ? { submitted_date: todayStr } : {}) })}>{BID_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
