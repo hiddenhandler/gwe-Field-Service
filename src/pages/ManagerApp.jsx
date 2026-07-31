@@ -20,66 +20,112 @@ function Bdg({ s }) {
 
 /* ═══ DASHBOARD ═══ */
 function Dashboard({ go }) {
+  const { profile } = useAuth()
+  const isMgr = profile?.role === 'manager'
   const [s, setS] = useState({ active: 0, today: 0, week: 0, sites: 0, flagged: 0 })
   const [recent, setRecent] = useState([])
   const [todayJobs, setTodayJobs] = useState([])
+  const [bids, setBids] = useState([])
+  const [leads, setLeads] = useState([])
   const [busy, setBusy] = useState(true)
 
   const load = useCallback(async () => {
     setBusy(true)
     const td = startOfDay(new Date()).toISOString(), wk = subDays(new Date(), 7).toISOString()
     const todayStr = format(new Date(), 'yyyy-MM-dd')
-    const [a, t, w, si, fl, r, sc] = await Promise.all([
+    const [a, t, w, si, fl, r, sc, bd, ld] = await Promise.all([
       supabase.from('visits').select('*', { count: 'exact', head: true }).eq('status', 'checked_in'),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', td),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', wk),
       supabase.from('locations').select('*', { count: 'exact', head: true }).eq('active', true),
       supabase.from('visits').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
-      supabase.from('visits').select('*, profiles(full_name), locations(name, city, service_type)').order('created_at', { ascending: false }).limit(8),
+      supabase.from('visits').select('*, profiles(full_name), locations(name, city)').order('created_at', { ascending: false }).limit(6),
       supabase.from('schedule').select('*').eq('service_date', todayStr).order('location_name'),
+      supabase.from('bids').select('*').eq('status', 'prospect').gte('due_date', todayStr).order('due_date').limit(6),
+      supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(6),
     ])
     setS({ active: a.count || 0, today: t.count || 0, week: w.count || 0, sites: si.count || 0, flagged: fl.count || 0 })
-    setRecent(r.data || [])
-    setTodayJobs(sc.data || [])
+    setRecent(r.data || []); setTodayJobs(sc.data || []); setBids(bd.data || []); setLeads(ld.data || [])
     setBusy(false)
   }, [])
   useEffect(() => { load() }, [load])
 
+  const doneToday = todayJobs.filter(j => j.status === 'completed').length
+  const in14 = format(new Date(Date.now() + 14 * 864e5), 'yyyy-MM-dd')
+
   return (
     <div className="pg">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Dashboard</h1><p style={{ color: 'var(--t2)', fontSize: 13, marginTop: 2 }}>{format(new Date(), 'EEEE, MMMM d, yyyy')}</p></div>
         <button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /> Refresh</button>
       </div>
-      <div className="stats" style={{ marginBottom: 20 }}>
-        {[{ l: 'On Site Now', v: s.active, g: true }, { l: 'Visits Today', v: s.today }, { l: 'Scheduled Today', v: todayJobs.length, b: true }, { l: 'Flagged', v: s.flagged, r: true }, { l: 'This Week', v: s.week }, { l: 'Active Sites', v: s.sites }].map(x => (
+      <div className="stats" style={{ marginBottom: 16 }}>
+        {[{ l: 'On Site Now', v: s.active, g: true }, { l: 'Scheduled Today', v: todayJobs.length, b: true }, { l: 'Flagged', v: s.flagged, r: true }, { l: 'Open Bids', v: bids.length }, { l: 'This Week', v: s.week }, { l: 'Active Sites', v: s.sites }].map(x => (
           <div key={x.l} className="stat" style={x.g && s.active > 0 ? { borderColor: 'var(--g-edge)', boxShadow: '0 0 20px var(--g-glow)' } : x.r && s.flagged > 0 ? { borderColor: 'rgba(224,82,82,.35)' } : {}}>
             <div className="stat-n" style={{ color: x.g && s.active > 0 ? 'var(--g-light)' : x.r && s.flagged > 0 ? 'var(--red)' : x.b && todayJobs.length > 0 ? 'var(--blue)' : undefined }}>{x.v}</div><div className="stat-l">{x.l}</div>
           </div>
         ))}
       </div>
-      {s.active > 0 && <div className="alrt alrt-ok" style={{ marginBottom: 12 }}><CheckCircle2 size={15} />{s.active} crew member{s.active > 1 ? 's' : ''} currently on site</div>}
-      {s.flagged > 0 && <div className="alrt alrt-err" style={{ marginBottom: 18, cursor: 'pointer' }} onClick={() => go('visits')}><Flag size={15} />{s.flagged} flagged visit{s.flagged > 1 ? 's' : ''} need review →</div>}
-      {todayJobs.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="sec-hd"><span className="sec-t">Today's Schedule — {todayJobs.length} job{todayJobs.length !== 1 ? 's' : ''}</span><button className="btn btn-g btn-sm" onClick={() => go('cal')}>Calendar →</button></div>
+      {s.flagged > 0 && <div className="alrt alrt-err" style={{ marginBottom: 16, cursor: 'pointer' }} onClick={() => go('visits')}><Flag size={15} />{s.flagged} flagged visit{s.flagged > 1 ? 's' : ''} need review →</div>}
+
+      {/* Row 1 — Today's Route  |  Bid Deadlines */}
+      <div className={isMgr ? 'fg2' : ''} style={{ marginBottom: 18 }}>
+        <div>
+          <div className="sec-hd"><span className="sec-t">Today's Route — {doneToday}/{todayJobs.length} done</span><button className="btn btn-g btn-sm" onClick={() => go('cal')}>Calendar →</button></div>
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {todayJobs.map(j => (
-              <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
-                <div><span style={{ fontWeight: 600 }}>{j.location_name}</span><span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 8 }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</span></div>
-                <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status}</span>
-              </div>
-            ))}
+            {todayJobs.length === 0 ? <div className="empty" style={{ padding: 26 }}><Calendar size={22} /><p>No jobs scheduled today</p></div> :
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>{todayJobs.map(j => (
+                <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                  <div><span style={{ fontWeight: 600 }}>{j.location_name}</span><span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 8 }}>{j.service_type}{j.subcontractor ? ` · ${j.subcontractor}` : ''}</span></div>
+                  <span className={`bdg ${j.status === 'completed' ? 'bdg-g' : 'bdg-x'}`}>{j.status === 'completed' ? '✓ Done' : j.status}</span>
+                </div>
+              ))}</div>}
           </div>
         </div>
-      )}
-      <div className="sec-hd"><span className="sec-t">Recent Activity</span><button className="btn btn-g btn-sm" onClick={() => go('visits')}>View all →</button></div>
-      <div className="card card-f">
-        {busy ? <div className="loader"><div className="spin" /></div> : recent.length === 0 ? <div className="empty"><Clock size={24} /><p>No visits yet</p></div> : (
-          <div className="tw"><table><thead><tr><th>Crew</th><th>Location</th><th>Check In</th><th>Duration</th><th>Status</th></tr></thead><tbody>
-            {recent.map(v => <tr key={v.id}><td style={{ fontWeight: 600 }}>{v.profiles?.full_name}</td><td><div>{v.locations?.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{v.locations?.city}</div></td><td className="mono" style={{ fontSize: 12 }}>{v.check_in_at ? format(new Date(v.check_in_at), 'MMM d, h:mm a') : '—'}</td><td className="mono" style={{ fontSize: 12 }}>{dur(v.check_in_at, v.check_out_at)}</td><td><Bdg s={v.status} /></td></tr>)}
-          </tbody></table></div>
-        )}
+        {isMgr && <div>
+          <div className="sec-hd"><span className="sec-t">Bid Deadlines</span><button className="btn btn-g btn-sm" onClick={() => go('bids')}>Bid Tracker →</button></div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {bids.length === 0 ? <div className="empty" style={{ padding: 26 }}><FileText size={22} /><p>No open bids</p></div> :
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>{bids.map(b => {
+                const wSoon = b.walkthrough_date && b.walkthrough_date >= format(new Date(), 'yyyy-MM-dd') && b.walkthrough_date <= in14
+                return (
+                  <div key={b.id} onClick={() => go('bids')} style={{ cursor: 'pointer', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                      <span style={{ fontWeight: 600 }}>{b.project}</span>
+                      {b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`} style={{ fontSize: 9, flexShrink: 0 }}>{b.gate}</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{b.city || b.county} · closes {b.due_date}{b.walkthrough_date ? <span style={{ color: wSoon ? 'var(--yellow)' : 'var(--t3)' }}> · walk {b.walkthrough_date}</span> : ''}</div>
+                  </div>
+                )
+              })}</div>}
+          </div>
+        </div>}
+      </div>
+
+      {/* Row 2 — Recent Lead Activity  |  Recent Visits */}
+      <div className={isMgr ? 'fg2' : ''}>
+        {isMgr && <div>
+          <div className="sec-hd"><span className="sec-t">Recent Lead Activity</span><button className="btn btn-g btn-sm" onClick={() => go('leads')}>Leads →</button></div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {leads.length === 0 ? <div className="empty" style={{ padding: 26 }}><Phone size={22} /><p>No leads yet</p></div> :
+              leads.map(l => (
+                <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
+                  <div><div style={{ fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.lead_type === 'cleaner' ? 'Cleaner' : 'Customer'}{l.company ? ` · ${l.company}` : ''}</div></div>
+                  <span className={`bdg ${l.status === 'won' ? 'bdg-g' : l.status === 'lost' ? 'bdg-r' : 'bdg-x'}`}>{l.status}</span>
+                </div>
+              ))}
+          </div>
+        </div>}
+        <div>
+          <div className="sec-hd"><span className="sec-t">Recent Visits</span><button className="btn btn-g btn-sm" onClick={() => go('visits')}>All Visits →</button></div>
+          <div className="card card-f">
+            {busy ? <div className="loader"><div className="spin" /></div> : recent.length === 0 ? <div className="empty"><Clock size={24} /><p>No visits yet</p></div> : (
+              <div className="tw"><table><thead><tr><th>Crew</th><th>Location</th><th>In</th><th>Dur</th><th>Status</th></tr></thead><tbody>
+                {recent.map(v => <tr key={v.id}><td style={{ fontWeight: 600 }}>{v.profiles?.full_name}</td><td><div>{v.locations?.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{v.locations?.city}</div></td><td className="mono" style={{ fontSize: 12 }}>{v.check_in_at ? format(new Date(v.check_in_at), 'MMM d, h:mm a') : '—'}</td><td className="mono" style={{ fontSize: 12 }}>{dur(v.check_in_at, v.check_out_at)}</td><td><Bdg s={v.status} /></td></tr>)}
+              </tbody></table></div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -606,11 +652,13 @@ function Bids() {
   const upd = async (id, patch) => { await supabase.from('bids').update(patch).eq('id', id); load() }
   const del = async (id) => { if (!window.confirm('Delete this bid?')) return; await supabase.from('bids').delete().eq('id', id); load() }
 
+  const [selBid, setSelBid] = useState(null), [copiedEmail, setCopiedEmail] = useState(false)
   const shown = filter === 'all' ? bids : bids.filter(b => b.status === filter)
   const counts = BID_STATUS.reduce((a, s) => ({ ...a, [s]: bids.filter(b => b.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
-  const dueSoon = (b) => b.status !== 'won' && b.status !== 'lost' && b.due_date && b.due_date <= format(addMonths(new Date(), 0), 'yyyy-MM-dd')
+  const in14 = format(new Date(Date.now() + 14 * 864e5), 'yyyy-MM-dd')
   const overdue = (b) => b.status === 'prospect' && b.due_date && b.due_date < todayStr
+  const walkSoon = (b) => b.walkthrough_date && b.walkthrough_date >= todayStr && b.walkthrough_date <= in14
 
   return (
     <div className="pg">
@@ -639,12 +687,54 @@ function Bids() {
           <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Bid'}</button>
         </form>
       </div>}
+      {selBid && (() => {
+        const b = selBid
+        const mail = b.intent_email ? `mailto:${b.contact_email || ''}?subject=${encodeURIComponent((b.intent_email.split('\n')[0] || '').replace(/^Subject:\s*/, ''))}&body=${encodeURIComponent(b.intent_email.split('\n').slice(2).join('\n'))}` : null
+        return (
+          <div className="card" style={{ marginBottom: 16, borderColor: b.gate === 'PASS' ? 'var(--g-edge)' : 'var(--bd2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div><div style={{ fontWeight: 800, fontSize: 16 }}>{b.project}</div><div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>{b.issuer}{b.solicitation_no ? ` · ${b.solicitation_no}` : ''}</div></div>
+              <button className="btn btn-g btn-sm" onClick={() => setSelBid(null)}><X size={12} /> Close</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`}>{b.gate}</span>}
+              {b.due_date && <span className="bdg bdg-x">Closes {b.due_date}</span>}
+              {b.walkthrough_date && <span className={`bdg ${walkSoon(b) ? 'bdg-r' : 'bdg-x'}`}><Flag size={9} /> Walk {b.walkthrough_date}</span>}
+              {b.questions_due && <span className="bdg bdg-x">Q's due {b.questions_due}</span>}
+            </div>
+            {b.reason && <p style={{ fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>{b.reason}</p>}
+            <div className="alrt alrt-ok" style={{ display: 'block', marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>ⓘ Important Info</div>
+              <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+                <div><b>Contact:</b> {b.contact_name || '—'} &nbsp;{b.contact_phone && <a href={`tel:${b.contact_phone}`} style={{ color: 'var(--g-light)' }}>{b.contact_phone}</a>} &nbsp;{b.contact_email && <a href={`mailto:${b.contact_email}`} style={{ color: 'var(--g-light)' }}>{b.contact_email}</a>}</div>
+                <div><b>Walkthrough:</b> {b.walkthrough || '—'}</div>
+                {b.scope && <div style={{ marginTop: 6 }}><b>Scope:</b> {b.scope}</div>}
+              </div>
+            </div>
+            {b.steps_apply && <div style={{ marginBottom: 10 }}><div className="sec-t" style={{ marginBottom: 4 }}>Step-by-step — Apply / Submit</div><div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6 }}>{b.steps_apply}</div></div>}
+            {b.steps_walk && <div style={{ marginBottom: 12 }}><div className="sec-t" style={{ marginBottom: 4 }}>Step-by-step — Confirm Walkthrough</div><div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6 }}>{b.steps_walk}</div></div>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: b.intent_email ? 12 : 0 }}>
+              {b.portal_link && <a className="btn btn-p btn-sm" href={b.portal_link} target="_blank" rel="noreferrer"><FileText size={11} /> Open Portal</a>}
+              {b.contact_email && <a className="btn btn-g btn-sm" href={`mailto:${b.contact_email}`}>Email Contact</a>}
+              {b.contact_phone && <a className="btn btn-g btn-sm" href={`tel:${b.contact_phone}`}><Phone size={11} /> Call</a>}
+            </div>
+            {b.intent_email && <div>
+              <div className="sec-t" style={{ marginBottom: 6 }}>Intent-to-Bid Email</div>
+              <textarea className="inp" readOnly rows={8} style={{ fontSize: 12, resize: 'vertical' }} value={b.intent_email} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn btn-g btn-sm" onClick={() => { try { navigator.clipboard.writeText(b.intent_email) } catch { } setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 1500) }}>{copiedEmail ? 'Copied!' : 'Copy email'}</button>
+                {mail && <a className="btn btn-p btn-sm" href={mail}>Open in Mail</a>}
+              </div>
+            </div>}
+          </div>
+        )
+      })()}
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><FileText size={24} /><p>No bids{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
           <div className="tw"><table><thead><tr><th>Project</th><th>Client</th><th>Amount</th><th>Status</th><th>Due</th><th>Notes</th><th></th></tr></thead><tbody>
-            {shown.map(b => <tr key={b.id} style={overdue(b) ? { background: 'rgba(224,82,82,.07)' } : {}}>
-              <td><div style={{ fontWeight: 600 }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.service_type}{b.city ? ` · ${b.city}` : ''}</div></td>
-              <td style={{ fontSize: 12 }}>{b.client}{b.contact ? <div style={{ color: 'var(--t3)' }}>{b.contact}</div> : ''}</td>
+            {shown.map(b => <tr key={b.id} style={overdue(b) ? { background: 'rgba(224,82,82,.07)' } : walkSoon(b) ? { background: 'rgba(212,160,23,.06)' } : {}}>
+              <td><button type="button" onClick={() => setSelBid(b)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{b.gate}</span>}{b.city || b.county}{b.solicitation_no ? ` · ${b.solicitation_no}` : ''}</div></button></td>
+              <td style={{ fontSize: 12 }}>{b.client || b.issuer}{b.walkthrough_date ? <div style={{ color: walkSoon(b) ? 'var(--yellow)' : 'var(--t3)' }}>walk {b.walkthrough_date}</div> : ''}</td>
               <td className="mono" style={{ fontSize: 12 }}>{b.amount != null ? `$${Number(b.amount).toLocaleString()}` : '—'}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.status} onChange={e => upd(b.id, { status: e.target.value, ...(e.target.value === 'submitted' && !b.submitted_date ? { submitted_date: todayStr } : {}) })}>{BID_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.due_date || ''} onChange={e => upd(b.id, { due_date: e.target.value || null })} />{overdue(b) && <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 2 }}>overdue</div>}</td>
