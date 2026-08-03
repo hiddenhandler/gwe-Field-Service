@@ -146,8 +146,8 @@ export function CallLogs() {
 
 /* ═══ TEAM TASKS TAB ═══ */
 const TT_STATUS = ['open', 'in_progress', 'done']
-const TT_CAT = ['Email Review', 'Sales Follow-up', 'Dispatch', 'Maintenance', 'Admin', 'Training', 'Other']
-const TT_TEMPLATES = ['Review email inbox', 'Follow up on open estimates', 'Confirm tomorrow’s schedule', 'Clear dispatch board', 'Check parts orders', 'Call back missed callers']
+const TT_CAT = ['Customer Follow-up', 'Cleaner Follow-up', 'Sales', 'Scheduling', 'Admin', 'Other']
+const TT_TEMPLATES = ['Follow up with customer', 'Follow up with cleaner', 'Call back customers', 'Confirm tomorrow’s schedule', 'Collect subcontractor docs (COI / WC)', 'Review email inbox']
 function TeamTasks() {
   const { profile } = useAuth()
   const canManage = profile?.role === 'manager'
