@@ -401,7 +401,7 @@ function Locations() {
 }
 
 /* ═══ CREW / ACCOUNTS ═══ */
-const ROLE_LABEL = { manager: 'Manager', subcontractor: 'Crew', viewer: 'Viewer' }
+const ROLE_LABEL = { manager: 'Manager', subcontractor: 'Crew', viewer: 'Employee' }
 function Crew() {
   const [people, setPeople] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [err, setErr] = useState(''), [ok, setOk] = useState('')
   const [f, setF] = useState({ full_name: '', email: '', password: '', phone: '', role: 'subcontractor' })
@@ -432,7 +432,7 @@ function Crew() {
             <select className="inp" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
               <option value="subcontractor">Crew (field app)</option>
               <option value="manager">Manager (full access)</option>
-              <option value="viewer">Viewer (read-only + flag)</option>
+              <option value="viewer">Employee (cold-caller / Leads CRM)</option>
             </select>
           </div>
         </div>
@@ -445,7 +445,7 @@ function Crew() {
             <td style={{ fontSize: 12 }}>{c.email}</td>
             <td style={{ fontSize: 12 }}>{c.phone || '—'}</td>
             <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.role} onChange={e => changeRole(c, e.target.value)}>
-              <option value="subcontractor">Crew</option><option value="manager">Manager</option><option value="viewer">Viewer</option>
+              <option value="subcontractor">Crew</option><option value="manager">Manager</option><option value="viewer">Employee</option>
             </select></td>
             <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.service_type || ''} onChange={e => changeService(c, e.target.value)}>
               <option value="">All services</option><option value="Janitorial">Janitorial</option><option value="Landscaping">Landscaping</option>
@@ -458,11 +458,19 @@ function Crew() {
   )
 }
 
-/* ═══ LEADS (manager only) ═══ */
+/* ═══ LEADS + CRM ═══ */
 const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
+const CALL_SCRIPTS = [
+  { t: 'Cleaner / Landscaper — Voicemail', b: `Hi [Name], this is Fernando from Great Way Environmental — we do commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you — I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name].` },
+  { t: 'Cleaner / Landscaper — Opener (owner picks up)', b: `Hey [Name], Fernando here — I'm the account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?` },
+  { t: 'Customer — Bundle Pitch (janitorial + landscaping)', b: `Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. A lot of properties pay two separate vendors for cleaning and grounds; we bundle both under one contract, which usually saves 10–20% and gives you a single point of contact. We already service the G&C, Lexus, and Hilton locations near you. Would it be worth a quick look at your current setup to see if we can tighten it up? No obligation.` },
+]
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s
 function Leads() {
+  const { profile } = useAuth()
+  const canManage = profile?.role === 'manager'   // employees (viewer) can work leads but not convert/propose
   const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
+  const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null)
   const [leadType, setLeadType] = useState('customer')  // customer | cleaner
   const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
   const [f, setF] = useState(blank)
@@ -476,14 +484,14 @@ function Leads() {
   const [sel, setSel] = useState(null), [props_, setProps] = useState([]), [cf, setCf] = useState({}), [savingCf, setSavingCf] = useState(false), [creating, setCreating] = useState(false), [copied, setCopied] = useState(null)
   const openLead = async (l) => {
     setSel(l)
-    setCf({ contact_person: l.contact_person || '', phone: l.phone || '', email: l.email || '', property_address: l.property_address || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job })
+    setCf({ contact_person: l.contact_person || '', phone: l.phone || '', email: l.email || '', property_address: l.property_address || '', square_footage: l.square_footage || '', building_type: l.building_type || '', service_frequency: l.service_frequency || '', service_type: l.service_type || 'Janitorial', monthly_price: l.monthly_price ?? '', is_job: !!l.is_job, has_employees: !!l.has_employees, gl_received: !!l.gl_received, gl_expiry: l.gl_expiry || '', wc_received: !!l.wc_received, wc_expiry: l.wc_expiry || '', vendor_agreement: l.vendor_agreement || 'pending', agreement_date: l.agreement_date || '', notes: l.notes || '' })
     setCrewMsg('')
     const { data } = await supabase.from('proposals').select('*').eq('lead_id', l.id).order('created_at', { ascending: false })
     setProps(data || [])
   }
   const saveCf = async () => {
     setSavingCf(true)
-    await supabase.from('leads').update({ ...cf, monthly_price: cf.monthly_price === '' ? null : Number(cf.monthly_price) }).eq('id', sel.id)
+    await supabase.from('leads').update({ ...cf, monthly_price: cf.monthly_price === '' ? null : Number(cf.monthly_price), gl_expiry: cf.gl_expiry || null, wc_expiry: cf.wc_expiry || null, agreement_date: cf.agreement_date || null }).eq('id', sel.id)
     const { data } = await supabase.from('leads').select('*').eq('id', sel.id).single()
     if (data) setSel(data)
     setSavingCf(false); load()
@@ -540,13 +548,30 @@ function Leads() {
   const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: typed.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const dueSoon = (l) => l.status === 'contacted' && l.callback_date && l.callback_date <= todayStr
+  const subCompliant = (l) => l.gl_received && (!l.gl_expiry || l.gl_expiry >= todayStr) && (!l.has_employees || (l.wc_received && (!l.wc_expiry || l.wc_expiry >= todayStr))) && l.vendor_agreement === 'signed'
 
   return (
     <div className="pg">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
-        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Cleaner' : 'Customer'}</>}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-g" onClick={() => setScripts(!scripts)}><Phone size={13} /> {scripts ? 'Hide Scripts' : 'Call Scripts'}</button>
+          <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Cleaner' : 'Customer'}</>}</button>
+        </div>
       </div>
+      {scripts && <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>📞 Call Scripts</div>
+        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number] for the real details. Tap to copy.</p>
+        {CALL_SCRIPTS.map((s, i) => (
+          <div key={i} style={{ borderTop: i ? '1px solid var(--bd)' : 'none', paddingTop: i ? 12 : 0, marginTop: i ? 12 : 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div className="sec-t">{s.t}</div>
+              <button className="btn btn-g btn-sm" onClick={() => { try { navigator.clipboard.writeText(s.b) } catch { } setScriptCopied(i); setTimeout(() => setScriptCopied(null), 1500) }}>{scriptCopied === i ? 'Copied!' : 'Copy'}</button>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, background: 'var(--bg3)', padding: '10px 12px', borderRadius: 'var(--r)' }}>{s.b}</div>
+          </div>
+        ))}
+      </div>}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         {[['customer', 'Customers'], ['cleaner', 'Cleaners']].map(([v, lb]) => (
           <button key={v} className={`btn btn-sm ${leadType === v ? 'btn-p' : 'btn-g'}`} style={{ flex: 1 }} onClick={() => { setLeadType(v); setSel(null); setFilter('all') }}>{lb} ({leads.filter(l => (l.lead_type || 'customer') === v).length})</button>
@@ -574,15 +599,57 @@ function Leads() {
             <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
             <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
           </div>
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label className="field-lbl">Call Notes</label>
+            <textarea className="inp" rows={2} style={{ resize: 'vertical' }} placeholder="Log what happened on the call…" value={cf.notes || ''} onChange={e => setCf({ ...cf, notes: e.target.value })} />
+          </div>
           {sel.lead_type === 'cleaner' ? (
             <>
               <div className="fg2" style={{ marginBottom: 12 }}>
                 {[['contact_person', 'Contact / Owner'], ['phone', 'Phone'], ['email', 'Email (needed for login)']].map(([k, lb]) =>
                   <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ borderTop: '1px solid var(--bd)', marginTop: 12, paddingTop: 12 }}>
+                <div className="sec-t" style={{ marginBottom: 8 }}>Compliance Documents</div>
+                <div className="alrt alrt-ok" style={{ display: 'block', marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
+                  ⓘ Collect from every sub: <b>General Liability</b> (required). <b>Workers' Comp</b> — required <b>only if they have employees</b>. Signed <b>Vendor Agreement</b> (we sub work to them; they agree not to solicit our accounts).
+                </div>
+                <div className="fg2" style={{ marginBottom: 12 }}>
+                  <div className="field"><label className="field-lbl">Has employees?</label>
+                    <button type="button" className={`btn btn-sm ${cf.has_employees ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, has_employees: !cf.has_employees })}>{cf.has_employees ? "Yes — Workers' Comp required" : 'No — GL only'}</button>
+                  </div>
+                  <div className="field"><label className="field-lbl">Vendor Agreement</label>
+                    <select className="inp" value={cf.vendor_agreement || 'pending'} onChange={e => setCf({ ...cf, vendor_agreement: e.target.value })}><option value="pending">Pending</option><option value="sent">Sent</option><option value="signed">Signed</option></select>
+                  </div>
+                  <div className="field"><label className="field-lbl">General Liability (expiry)</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" className={`btn btn-sm ${cf.gl_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, gl_received: !cf.gl_received })}>{cf.gl_received ? '✓ On file' : 'Missing'}</button>
+                      <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.gl_expiry || ''} onChange={e => setCf({ ...cf, gl_expiry: e.target.value })} />
+                    </div>
+                  </div>
+                  {cf.has_employees && <div className="field"><label className="field-lbl">Workers' Comp (expiry)</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" className={`btn btn-sm ${cf.wc_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, wc_received: !cf.wc_received })}>{cf.wc_received ? '✓ On file' : 'Missing'}</button>
+                      <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.wc_expiry || ''} onChange={e => setCf({ ...cf, wc_expiry: e.target.value })} />
+                    </div>
+                  </div>}
+                </div>
+                {(() => {
+                  const glOk = cf.gl_received && (!cf.gl_expiry || cf.gl_expiry >= todayStr)
+                  const wcOk = !cf.has_employees || (cf.wc_received && (!cf.wc_expiry || cf.wc_expiry >= todayStr))
+                  const agOk = cf.vendor_agreement === 'signed'
+                  const miss = [
+                    (!cf.gl_received ? 'General Liability' : (cf.gl_expiry && cf.gl_expiry < todayStr) ? 'General Liability (EXPIRED)' : null),
+                    (cf.has_employees && (!cf.wc_received ? "Workers' Comp" : (cf.wc_expiry && cf.wc_expiry < todayStr) ? "Workers' Comp (EXPIRED)" : null)),
+                    (!agOk ? 'Signed Vendor Agreement' : null),
+                  ].filter(Boolean)
+                  const ok = glOk && wcOk && agOk
+                  return <div className={`alrt ${ok ? 'alrt-ok' : 'alrt-err'}`} style={{ fontSize: 13 }}>{ok ? <><CheckCircle2 size={14} /> Compliant — cleared to sub</> : <><AlertCircle size={14} /> Missing: {miss.join(' · ')}</>}</div>
+                })()}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                 <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
-                <button className="btn btn-p btn-sm" onClick={convertToCrew} disabled={converting}>{converting ? 'Creating…' : '★ Convert to Crew'}</button>
+                {canManage && <button className="btn btn-p btn-sm" onClick={convertToCrew} disabled={converting}>{converting ? 'Creating…' : '★ Convert to Crew'}</button>}
               </div>
               {crewMsg && <div className="alrt alrt-ok" style={{ marginTop: 12, wordBreak: 'break-word' }}><CheckCircle2 size={14} />{crewMsg}</div>}
             </>
@@ -597,10 +664,10 @@ function Leads() {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
-                <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>
-                <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>
+                {canManage && <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>}
+                {canManage && <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>}
               </div>
-              {props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
+              {canManage && props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
                 <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
                 {props_.map(p => (
                   <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
@@ -627,7 +694,7 @@ function Leads() {
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{l.notes}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{leadType === 'cleaner' && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
               <td><button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button></td>
             </tr>)}
           </tbody></table></div>}
@@ -778,8 +845,9 @@ export default function ManagerApp() {
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
   // Viewers get read-only access: no Locations / Leads / Crew management
-  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'leads', 'bids', 'crew'].includes(i.id)) : allMenu
-  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'leads', 'bids', 'crew'].includes(i.id)) : allMobile
+  // Employees (viewer role) are cold-callers: they get Leads (CRM), not Customers/Bids/Accounts
+  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'bids', 'crew'].includes(i.id)) : allMenu
+  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'bids', 'crew'].includes(i.id)) : allMobile
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -794,7 +862,7 @@ export default function ManagerApp() {
           {tab === 'cal' && <CalendarView />}
           {tab === 'visits' && <AllVisits />}
           {tab === 'locs' && !isViewer && <Locations />}
-          {tab === 'leads' && !isViewer && <Leads />}
+          {tab === 'leads' && <Leads />}
           {tab === 'bids' && !isViewer && <Bids />}
           {tab === 'crew' && !isViewer && <Crew />}
         </main>
