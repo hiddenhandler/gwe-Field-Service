@@ -729,7 +729,7 @@ function Leads() {
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
               <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{leadType === 'cleaner' && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
-              <td><button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button></td>
+              <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
             </tr>)}
           </tbody></table></div>}
       </div>
@@ -740,6 +740,8 @@ function Leads() {
 /* ═══ BID TRACKER (manager only) ═══ */
 const BID_STATUS = ['prospect', 'submitted', 'won', 'lost']
 function Bids() {
+  const { profile } = useAuth()
+  const canManage = profile?.role === 'manager'
   const [bids, setBids] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
   const blank = { project: '', client: '', city: '', service_type: 'Janitorial', amount: '', due_date: '', contact: '', notes: '' }
   const [f, setF] = useState(blank)
@@ -767,7 +769,7 @@ function Bids() {
     <div className="pg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Bid Tracker</h1>
-        <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Bid</>}</button>
+        {canManage && <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add Bid</>}</button>}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {['all', ...BID_STATUS].map(s => (
@@ -844,10 +846,10 @@ function Bids() {
               <td><button type="button" onClick={() => openBid(b)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{b.project}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{b.gate && <span className={`bdg ${b.gate === 'PASS' ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{b.gate}</span>}{b.city || b.county}{b.solicitation_no ? ` · ${b.solicitation_no}` : ''}</div></button></td>
               <td style={{ fontSize: 12 }}>{b.client || b.issuer}{b.walkthrough_date ? <div style={{ color: walkSoon(b) ? 'var(--yellow)' : 'var(--t3)' }}>walk {b.walkthrough_date}</div> : ''}</td>
               <td className="mono" style={{ fontSize: 12 }}>{b.amount != null ? `$${Number(b.amount).toLocaleString()}` : '—'}</td>
-              <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.status} onChange={e => upd(b.id, { status: e.target.value, ...(e.target.value === 'submitted' && !b.submitted_date ? { submitted_date: todayStr } : {}) })}>{BID_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
-              <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.due_date || ''} onChange={e => upd(b.id, { due_date: e.target.value || null })} />{overdue(b) && <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 2 }}>overdue</div>}</td>
+              <td>{canManage ? <select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.status} onChange={e => upd(b.id, { status: e.target.value, ...(e.target.value === 'submitted' && !b.submitted_date ? { submitted_date: todayStr } : {}) })}>{BID_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select> : <span className={`bdg ${b.status === 'won' ? 'bdg-g' : b.status === 'lost' ? 'bdg-r' : 'bdg-x'}`}>{cap(b.status)}</span>}</td>
+              <td>{canManage ? <input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={b.due_date || ''} onChange={e => upd(b.id, { due_date: e.target.value || null })} /> : <span className="mono" style={{ fontSize: 12 }}>{b.due_date || '—'}</span>}{overdue(b) && <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 2 }}>overdue</div>}</td>
               <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{b.notes}</td>
-              <td><button className="btn btn-d btn-sm" onClick={() => del(b.id)}><Trash2 size={11} /></button></td>
+              <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(b.id)}><Trash2 size={11} /></button>}</td>
             </tr>)}
           </tbody></table></div>}
       </div>
@@ -883,9 +885,9 @@ export default function ManagerApp() {
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
   ]
   // Viewers get read-only access: no Locations / Leads / Crew management
-  // Employees (viewer role) are cold-callers: they get Leads (CRM), not Customers/Bids/Accounts
-  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'bids', 'crew'].includes(i.id)) : allMenu
-  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'bids', 'crew'].includes(i.id)) : allMobile
+  // Employees (viewer): Leads CRM + Calls + Team Tasks + Bids (read-only). No Customers/Accounts.
+  const menuItems = isViewer ? allMenu.filter(i => !['locs', 'crew'].includes(i.id)) : allMenu
+  const mobileItems = isViewer ? allMobile.filter(i => !['locs', 'crew'].includes(i.id)) : allMobile
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -903,7 +905,7 @@ export default function ManagerApp() {
           {tab === 'leads' && <Leads />}
           {tab === 'calls' && <CallLogs />}
           {tab === 'ttasks' && <TeamTasks />}
-          {tab === 'bids' && !isViewer && <Bids />}
+          {tab === 'bids' && <Bids />}
           {tab === 'crew' && !isViewer && <Crew />}
         </main>
       </div>

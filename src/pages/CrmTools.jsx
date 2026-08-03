@@ -150,6 +150,7 @@ const TT_CAT = ['Email Review', 'Sales Follow-up', 'Dispatch', 'Maintenance', 'A
 const TT_TEMPLATES = ['Review email inbox', 'Follow up on open estimates', 'Confirm tomorrow’s schedule', 'Clear dispatch board', 'Check parts orders', 'Call back missed callers']
 function TeamTasks() {
   const { profile } = useAuth()
+  const canManage = profile?.role === 'manager'
   const [tasks, setTasks] = useState([]), [people, setPeople] = useState([]), [busy, setBusy] = useState(true), [filter, setFilter] = useState('all'), [add, setAdd] = useState(false), [saving, setSaving] = useState(false)
   const blank = { title: '', description: '', category: 'Other', priority: 'normal', assignee: '', due_date: '', recurring: 'one_time' }
   const [f, setF] = useState(blank)
@@ -205,7 +206,7 @@ function TeamTasks() {
                 <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{t.category} · {nameOf(t.assignee)}{t.due_date ? ` · due ${t.due_date}` : ''}{t.recurring && t.recurring !== 'one_time' ? ` · ${t.recurring}` : ''}</div>
               </div>
               <select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={t.status} onChange={e => upd(t.id, { status: e.target.value })}>{TT_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select>
-              <button className="btn btn-d btn-sm" onClick={() => del(t.id)}><X size={11} /></button>
+              {canManage && <button className="btn btn-d btn-sm" onClick={() => del(t.id)}><X size={11} /></button>}
             </div>
           ))}
       </div>
