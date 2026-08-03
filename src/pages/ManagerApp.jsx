@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2, FileText } from 'lucide-react'
+import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2, FileText, PhoneCall, ListChecks } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
 import { downloadProposalPptx } from '../lib/proposalPptx'
+import { CallLogs, TeamTasks, LogCall } from './CrmTools'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
@@ -461,16 +462,37 @@ function Crew() {
 /* ═══ LEADS + CRM ═══ */
 const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
 const CALL_SCRIPTS = [
-  { t: 'Cleaner / Landscaper — Voicemail', b: `Hi [Name], this is Fernando from Great Way Environmental — we do commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you — I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name].` },
-  { t: 'Cleaner / Landscaper — Opener (owner picks up)', b: `Hey [Name], Fernando here — I'm the account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?` },
-  { t: 'Customer — Bundle Pitch (janitorial + landscaping)', b: `Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. A lot of properties pay two separate vendors for cleaning and grounds; we bundle both under one contract, which usually saves 10–20% and gives you a single point of contact. We already service the G&C, Lexus, and Hilton locations near you. Would it be worth a quick look at your current setup to see if we can tighten it up? No obligation.` },
+  {
+    t: 'Cleaners & Landscapers — Partner / Overflow',
+    sub: "Not a sale — build a network of local owners you can hand overflow to (and who feed you work).",
+    sections: [
+      { h: 'Voicemail', b: "Hi [Name], this is Fernando from Great Way Environmental — commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you. I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name]." },
+      { h: 'Opener (they pick up)', b: "Hey [Name], Fernando here — account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?" },
+      { h: "Value — what's in it for them", b: "Here's the idea: when we win a contract that's too far or too big, instead of turning it down we sub it to a trusted local owner. You do the work, we handle the client and the billing, and you get steady accounts without chasing them. When you're slammed, you send us work the same way." },
+      { h: 'Qualify', b: "What areas do you cover? … Do you run your own crew or is it just you and a couple guys? … You carry general liability, right? And workers' comp if you've got employees?" },
+      { h: 'Objections', b: "\"What's the catch / how do you make money?\" → We keep the client relationship and a small margin for managing it and guaranteeing the work. You get paid to clean, not to sell.\n\n\"I already have enough work.\" → Perfect — that's exactly who I want in my back pocket when I'm overloaded. And if you hit a slow month, you know where to call.\n\n\"How do I know I'll get paid?\" → We invoice the client, you invoice us, net terms — in writing. Happy to start you on one small account so you can see how we operate." },
+      { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a certificate of insurance (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
+    ],
+  },
+  {
+    t: 'Customers — Bundle Pitch (Janitorial + Landscaping)',
+    sub: 'Goal: book a 10-minute walkthrough / quote.',
+    sections: [
+      { h: 'Opener', b: "Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. Quick reason for the call: most properties pay two separate vendors for cleaning and grounds. We bundle both under one contract — one crew, one invoice, one point of contact." },
+      { h: 'Value', b: "Bundling usually saves 10–20% versus two vendors, and you stop playing middleman between the cleaner and the landscaper. If something's off, you call one number and it's handled." },
+      { h: 'Social proof', b: "We already take care of the G&C, Lexus, and Hilton locations near you, so we're out in your area every week anyway." },
+      { h: 'Qualify', b: "Who handles your cleaning and landscaping right now — in-house or contracted? … Are you happy with them, or is it more 'it's fine'? … When does your current agreement come up?" },
+      { h: 'Objections', b: "\"We're already under contract.\" → No problem — when's it up for renewal? I'll send a quick side-by-side so you're ready.\n\n\"Just send pricing.\" → Pricing depends on square footage and frequency — let me do a 10-min walkthrough so you get a real number, not a guess.\n\n\"We're happy with who we have.\" → Love that. Most of our clients were too — until one vendor for both turned out to be less hassle and less money.\n\n\"How much?\" → For a property your size, bundled usually lands around [range]/mo — let me confirm with a walkthrough so I'm not overpromising." },
+      { h: 'Close', b: "Here's what I'd suggest: a fast 10-minute walkthrough, I put together a bundled proposal you can review and sign online, and if it doesn't beat what you've got, no harm done. Does [day] morning or afternoon work better?" },
+    ],
+  },
 ]
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s
 function Leads() {
   const { profile } = useAuth()
   const canManage = profile?.role === 'manager'   // employees (viewer) can work leads but not convert/propose
   const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
-  const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null)
+  const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null), [callLead, setCallLead] = useState(null)
   const [leadType, setLeadType] = useState('customer')  // customer | cleaner
   const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
   const [f, setF] = useState(blank)
@@ -552,6 +574,7 @@ function Leads() {
 
   return (
     <div className="pg">
+      {callLead && <LogCall lead={callLead} onClose={() => setCallLead(null)} onSaved={() => { load(); if (sel) openLead(sel) }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -561,16 +584,24 @@ function Leads() {
       </div>
       {scripts && <div className="card" style={{ marginBottom: 14 }}>
         <div style={{ fontWeight: 700, marginBottom: 4 }}>📞 Call Scripts</div>
-        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number] for the real details. Tap to copy.</p>
-        {CALL_SCRIPTS.map((s, i) => (
-          <div key={i} style={{ borderTop: i ? '1px solid var(--bd)' : 'none', paddingTop: i ? 12 : 0, marginTop: i ? 12 : 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <div className="sec-t">{s.t}</div>
-              <button className="btn btn-g btn-sm" onClick={() => { try { navigator.clipboard.writeText(s.b) } catch { } setScriptCopied(i); setTimeout(() => setScriptCopied(null), 1500) }}>{scriptCopied === i ? 'Copied!' : 'Copy'}</button>
+        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number], [range]. "Copy all" grabs the whole script.</p>
+        {CALL_SCRIPTS.map((s, i) => {
+          const full = `${s.t}\n\n` + s.sections.map(x => `${x.h}:\n${x.b}`).join('\n\n')
+          return (
+            <div key={i} style={{ borderTop: i ? '1px solid var(--bd)' : 'none', paddingTop: i ? 14 : 0, marginTop: i ? 14 : 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
+                <div><div style={{ fontWeight: 700, fontSize: 14 }}>{s.t}</div><div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{s.sub}</div></div>
+                <button className="btn btn-g btn-sm" style={{ flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(full) } catch { } setScriptCopied(i); setTimeout(() => setScriptCopied(null), 1500) }}>{scriptCopied === i ? 'Copied!' : 'Copy all'}</button>
+              </div>
+              {s.sections.map((x, j) => (
+                <div key={j} style={{ marginBottom: 8 }}>
+                  <div className="sec-t" style={{ marginBottom: 4 }}>{x.h}</div>
+                  <div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-line', background: 'var(--bg3)', padding: '10px 12px', borderRadius: 'var(--r)' }}>{x.b}</div>
+                </div>
+              ))}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, background: 'var(--bg3)', padding: '10px 12px', borderRadius: 'var(--r)' }}>{s.b}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         {[['customer', 'Customers'], ['cleaner', 'Cleaners']].map(([v, lb]) => (
@@ -597,7 +628,10 @@ function Leads() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
-            <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-p btn-sm" onClick={() => setCallLead(sel)}><Phone size={12} /> Log Call</button>
+              <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
+            </div>
           </div>
           <div className="field" style={{ marginBottom: 12 }}>
             <label className="field-lbl">Call Notes</label>
@@ -832,6 +866,8 @@ export default function ManagerApp() {
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Customers', icon: <MapPin size={16} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={16} /> },
+    { id: 'calls', label: 'Call Logs', icon: <PhoneCall size={16} /> },
+    { id: 'ttasks', label: 'Team Tasks', icon: <ListChecks size={16} /> },
     { id: 'bids', label: 'Bids', icon: <FileText size={16} /> },
     { id: 'crew', label: 'Accounts', icon: <Users size={16} /> },
   ]
@@ -840,6 +876,8 @@ export default function ManagerApp() {
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={20} /> },
+    { id: 'calls', label: 'Calls', icon: <PhoneCall size={20} /> },
+    { id: 'ttasks', label: 'Tasks', icon: <ListChecks size={20} /> },
     { id: 'bids', label: 'Bids', icon: <FileText size={20} /> },
     { id: 'locs', label: 'Customers', icon: <MapPin size={20} /> },
     { id: 'crew', label: 'Team', icon: <Users size={20} /> },
@@ -863,6 +901,8 @@ export default function ManagerApp() {
           {tab === 'visits' && <AllVisits />}
           {tab === 'locs' && !isViewer && <Locations />}
           {tab === 'leads' && <Leads />}
+          {tab === 'calls' && <CallLogs />}
+          {tab === 'ttasks' && <TeamTasks />}
           {tab === 'bids' && !isViewer && <Bids />}
           {tab === 'crew' && !isViewer && <Crew />}
         </main>

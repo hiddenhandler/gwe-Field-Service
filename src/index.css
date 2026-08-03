@@ -116,6 +116,8 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg-
 .photo-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1px dashed var(--bd2);border-radius:var(--r);background:var(--bg3);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;width:100%}
 .photo-btn:hover{border-color:var(--g);color:var(--g-light);background:var(--g-glow)}
 .photo-btn input{display:none}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+.modal-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r2);padding:20px;width:100%;max-width:820px;margin:auto}
 .loc-list{margin-top:8px;max-height:280px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg3)}
 .loc-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;border-bottom:1px solid var(--bd);background:none;cursor:pointer;transition:background .1s}
 .loc-item:last-child{border-bottom:none}
