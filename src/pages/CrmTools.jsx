@@ -7,9 +7,23 @@ import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2 } from 'lucide-reac
 const cap = s => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : s
 const OUTCOMES = ['connected', 'interested', 'callback', 'voicemail', 'no_answer', 'left_message', 'not_interested']
 
-const GREETING = {
-  cleaner: "Hey [Name], Fernando here — account manager at Great Way Environmental, commercial cleaning & landscaping out of [city]. I'm not selling anything — I run into more work than my crews can cover and I'd rather hand it to a solid local owner than a franchise. How long have you been running your shop?",
-  customer: "Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping. Most properties pay two separate vendors for cleaning and grounds; we bundle both under one contract, usually saves 10–20% and gives you one point of contact. We already service the G&C, Lexus, and Hilton spots near you — worth a quick look?",
+const SCRIPTS = {
+  cleaner: [
+    { h: 'Voicemail', b: "Hi [Name], this is Fernando from Great Way Environmental — commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you. I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name]." },
+    { h: 'Opener (they pick up)', b: "Hey [Name], Fernando here — account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?" },
+    { h: 'Value', b: "Here's the idea: when we win a contract that's too far or too big, instead of turning it down we sub it to a trusted local owner. You do the work, we handle the client and the billing, and you get steady accounts without chasing them. When you're slammed, you send us the same way." },
+    { h: 'Qualify', b: "Nice, that's a long time. Are you the owner and out in the field too, or do you have a team running it? … What areas do you cover? … Are you turning work away these days, or hungry for more? … You carry general liability, right? And workers' comp if you've got employees? … Do you have someone coming up behind you to take it over eventually, or is it pretty much you holding it together?" },
+    { h: 'Objections', b: "\"What's the catch / how do you make money?\" → We keep the client relationship and a small margin for managing it and guaranteeing the work. You get paid to clean, not to sell.\n\n\"I already have enough work.\" → Perfect — that's exactly who I want in my back pocket when I'm overloaded. And if you hit a slow month, you know where to call.\n\n\"How do I know I'll get paid?\" → We invoice the client, you invoice us, net terms — in writing. Happy to start you on one small account so you can see how we operate." },
+    { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a certificate of insurance (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
+  ],
+  customer: [
+    { h: 'Opener', b: "Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. Quick reason for the call: most properties are paying two separate vendors for cleaning and grounds. We bundle both under one contract — one crew, one invoice, one point of contact." },
+    { h: 'Value', b: "Bundling usually saves 10–20% versus two vendors, and you stop playing middleman between the cleaner and the landscaper. If something's off, you call one number and it's handled." },
+    { h: 'Social proof', b: "We already take care of the G&C, Lexus, and Hilton locations near you, so we're out in your area every week anyway." },
+    { h: 'Qualify', b: "Who handles your cleaning and landscaping right now — in-house or contracted? … Are you happy with them, or is it more of a 'it's fine' situation? … When does your current agreement come up?" },
+    { h: 'Objections', b: "\"We're already under contract.\" → Totally fine — I'm not asking you to break anything. When's it up for renewal? I'll send a quick side-by-side so you're ready.\n\n\"Just send me pricing.\" → Pricing depends on square footage and frequency — let me do a 10-min walkthrough so you get a real number, not a guess.\n\n\"We're happy with who we have.\" → Love that. Most of our clients were too — until one vendor for both turned out to be less hassle and less money.\n\n\"How much?\" → For a property your size, bundled usually lands around [range]/mo — let me confirm with a walkthrough so I'm not overpromising." },
+    { h: 'Close', b: "Here's what I'd suggest: a fast 10-minute walkthrough, I put together a bundled proposal you can review and sign online, and if it doesn't beat what you've got, no harm done. Does [day] morning or afternoon work better?" },
+  ],
 }
 
 /* ═══ GUIDED CALL INTAKE MODAL (launch from a lead's "Log Call") ═══ */
@@ -25,6 +39,7 @@ export function LogCall({ lead, onClose, onSaved }) {
     has_employees: !!lead?.has_employees, gl: !!lead?.gl_received, wc: !!lead?.wc_received,
   })
   const [busy, setBusy] = useState(false)
+  const [showScript, setShowScript] = useState(true)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
@@ -114,9 +129,16 @@ export function LogCall({ lead, onClose, onSaved }) {
 
         <div className="fg2">
           <div>
-            <div className="alrt" style={{ display: 'block', background: 'rgba(74,158,255,.08)', border: '1px solid rgba(74,158,255,.25)', marginBottom: 14 }}>
-              <div className="sec-t" style={{ marginBottom: 4 }}>Opening (read aloud)</div>
-              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{GREETING[isCleaner ? 'cleaner' : 'customer']}</div>
+            <div style={{ marginBottom: 14 }}>
+              <div className="sec-t" style={{ marginBottom: 6 }}>📖 {isCleaner ? 'Cleaner / Partner' : 'Customer'} Script — read aloud</div>
+              <div className="card" style={{ maxHeight: 340, overflowY: 'auto', background: 'rgba(74,158,255,.06)', border: '1px solid rgba(74,158,255,.22)' }}>
+                {(isCleaner ? SCRIPTS.cleaner : SCRIPTS.customer).map((s, i) => (
+                  <div key={i} style={{ marginBottom: 10 }}>
+                    <div className="sec-t" style={{ marginBottom: 3, color: 'var(--blue)' }}>{s.h}</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{s.b}</div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="field" style={{ marginBottom: 14 }}><label className="field-lbl">Purpose</label>
               <select className="inp" value={f.purpose} onChange={e => set('purpose', e.target.value)}>
