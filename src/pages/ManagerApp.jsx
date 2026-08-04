@@ -463,6 +463,7 @@ function Crew() {
 const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
 const CALL_SCRIPTS = [
   {
+    type: 'cleaner',
     t: 'Cleaners & Landscapers — Partner / Overflow',
     sub: "Not a sale — build a network of local owners you can hand overflow to (and who feed you work).",
     sections: [
@@ -475,15 +476,16 @@ const CALL_SCRIPTS = [
     ],
   },
   {
+    type: 'customer',
     t: 'Customers — Bundle Pitch (Janitorial + Landscaping)',
-    sub: 'Goal: book a 10-minute walkthrough / quote.',
+    sub: 'Goal: book a 10-minute walkthrough.',
     sections: [
       { h: 'Opener', b: "Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. Quick reason for the call: most properties pay two separate vendors for cleaning and grounds. We bundle both under one contract — one crew, one invoice, one point of contact." },
-      { h: 'Value', b: "Bundling usually saves 10–20% versus two vendors, and you stop playing middleman between the cleaner and the landscaper. If something's off, you call one number and it's handled." },
+      { h: 'Value', b: "Bundling means you stop playing middleman between the cleaner and the landscaper. One crew, one point of contact — if something's off, you call one number and it's handled." },
       { h: 'Social proof', b: "We already take care of the G&C, Lexus, and Hilton locations near you, so we're out in your area every week anyway." },
       { h: 'Qualify', b: "Who handles your cleaning and landscaping right now — in-house or contracted? … Are you happy with them, or is it more 'it's fine'? … When does your current agreement come up?" },
-      { h: 'Objections', b: "\"We're already under contract.\" → No problem — when's it up for renewal? I'll send a quick side-by-side so you're ready.\n\n\"Just send pricing.\" → Pricing depends on square footage and frequency — let me do a 10-min walkthrough so you get a real number, not a guess.\n\n\"We're happy with who we have.\" → Love that. Most of our clients were too — until one vendor for both turned out to be less hassle and less money.\n\n\"How much?\" → For a property your size, bundled usually lands around [range]/mo — let me confirm with a walkthrough so I'm not overpromising." },
-      { h: 'Close', b: "Here's what I'd suggest: a fast 10-minute walkthrough, I put together a bundled proposal you can review and sign online, and if it doesn't beat what you've got, no harm done. Does [day] morning or afternoon work better?" },
+      { h: 'Objections', b: "\"We're already under contract.\" → No problem — when's it up for renewal? I'll send a quick side-by-side so you're ready.\n\n\"Just send pricing.\" → Every property's different — the only way to give you a real number is a quick 10-minute walkthrough. No guessing, no obligation.\n\n\"We're happy with who we have.\" → Love that. Most of our clients were too — until one vendor for both turned out to be a lot less hassle.\n\n\"How much?\" → That's exactly what the walkthrough is for — I'd rather see the space and give you a real number than throw out a guess over the phone." },
+      { h: 'Close', b: "Here's what I'd suggest: a fast 10-minute walkthrough, then I put together a bundled proposal you can review and sign online. No pressure either way. Does [day] morning or afternoon work better?" },
     ],
   },
 ]
@@ -583,9 +585,9 @@ function Leads() {
         </div>
       </div>
       {scripts && <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>📞 Call Scripts</div>
-        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number], [range]. "Copy all" grabs the whole script.</p>
-        {CALL_SCRIPTS.map((s, i) => {
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>📞 {leadType === 'cleaner' ? 'Cleaner / Partner' : 'Customer'} Script</div>
+        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number]. Never quote a price — book the walkthrough first. "Copy all" grabs the whole script.</p>
+        {CALL_SCRIPTS.filter(s => s.type === leadType).map((s, i) => {
           const full = `${s.t}\n\n` + s.sections.map(x => `${x.h}:\n${x.b}`).join('\n\n')
           return (
             <div key={i} style={{ borderTop: i ? '1px solid var(--bd)' : 'none', paddingTop: i ? 14 : 0, marginTop: i ? 14 : 0 }}>
