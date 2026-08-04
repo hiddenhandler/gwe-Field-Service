@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2 } from 'lucide-react'
+import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2, Trash2 } from 'lucide-react'
 
 const cap = s => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : s
-const OUTCOMES = ['connected', 'interested', 'callback', 'voicemail', 'no_answer', 'left_message', 'not_interested']
+const OUTCOMES = ['connected', 'interested', 'callback', 'voicemail', 'no_answer', 'left_message', 'disconnected', 'not_interested']
 
 const SCRIPTS = {
   cleaner: [
@@ -173,9 +173,47 @@ export function LogCall({ lead, onClose, onSaved }) {
   )
 }
 
+/* ═══ CALL DETAIL / REVIEW MODAL ═══ */
+function CallDetail({ call, onClose, onSaved, canManage }) {
+  const [notes, setNotes] = useState(call.notes || '')
+  const [outcome, setOutcome] = useState(call.outcome)
+  const [cb, setCb] = useState(call.callback_date || '')
+  const [busy, setBusy] = useState(false)
+  const save = async () => { setBusy(true); await supabase.from('call_logs').update({ notes, outcome, callback_date: cb || null }).eq('id', call.id); setBusy(false); onSaved && onSaved(); onClose() }
+  const del = async () => { if (!window.confirm('Delete this call log?')) return; setBusy(true); await supabase.from('call_logs').delete().eq('id', call.id); setBusy(false); onSaved && onSaved(); onClose() }
+  return (
+    <div className="modal-ov" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}><Phone size={15} /> {call.business || 'Call'}</div>
+          <button className="btn btn-g btn-sm" onClick={onClose}><X size={13} /></button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 14 }}>
+          {call.contact_name ? `${call.contact_name} · ` : ''}{call.phone ? <a href={`tel:${call.phone}`} style={{ color: 'var(--g-light)' }}>{call.phone}</a> : 'no phone'}
+          {call.created_at ? ` · ${format(new Date(call.created_at), 'MMM d, yyyy h:mm a')}` : ''}
+          {call.purpose ? ` · ${call.purpose}` : ''}
+        </div>
+        <div className="fg2" style={{ marginBottom: 14 }}>
+          <div className="field"><label className="field-lbl">Outcome</label><select className="inp" value={outcome} onChange={e => setOutcome(e.target.value)}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></div>
+          <div className="field"><label className="field-lbl">Callback date</label><input type="date" className="inp" value={cb} onChange={e => setCb(e.target.value)} /></div>
+        </div>
+        <div className="field" style={{ marginBottom: 14 }}><label className="field-lbl">Call notes</label>
+          <textarea className="inp" rows={8} style={{ resize: 'vertical', whiteSpace: 'pre-line', lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+          {canManage ? <button className="btn btn-d btn-sm" onClick={del} disabled={busy}><Trash2 size={13} /> Delete</button> : <span />}
+          <button className="btn btn-p" onClick={save} disabled={busy}>{busy ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ═══ CALL LOGS TAB ═══ */
 export function CallLogs() {
-  const [calls, setCalls] = useState([]), [busy, setBusy] = useState(true), [filter, setFilter] = useState('all'), [q, setQ] = useState(''), [modal, setModal] = useState(false)
+  const { profile } = useAuth()
+  const canManage = profile?.role === 'manager'
+  const [calls, setCalls] = useState([]), [busy, setBusy] = useState(true), [filter, setFilter] = useState('all'), [q, setQ] = useState(''), [modal, setModal] = useState(false), [sel, setSel] = useState(null)
   const load = async () => { const { data } = await supabase.from('call_logs').select('*').order('created_at', { ascending: false }).limit(500); setCalls(data || []); setBusy(false) }
   useEffect(() => { load() }, [])
   const upd = async (id, patch) => { await supabase.from('call_logs').update(patch).eq('id', id); load() }
@@ -186,6 +224,7 @@ export function CallLogs() {
   return (
     <div className="pg">
       {modal && <LogCall onClose={() => setModal(false)} onSaved={load} />}
+      {sel && <CallDetail call={sel} canManage={canManage} onClose={() => setSel(null)} onSaved={load} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Call Logs</h1><p style={{ color: 'var(--t2)', fontSize: 13, marginTop: 2 }}>{calls.length} total · {shown.length} shown</p></div>
         <div style={{ display: 'flex', gap: 8 }}><button className="btn btn-p" onClick={() => setModal(true)}><Plus size={13} /> New Call</button><button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /></button></div>
@@ -196,14 +235,15 @@ export function CallLogs() {
       <input className="inp" placeholder="Search name, caller, phone, notes…" value={q} onChange={e => setQ(e.target.value)} style={{ marginBottom: 12 }} />
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No calls logged</p></div> :
-          <div className="tw"><table><thead><tr><th>Business</th><th>Contact</th><th>Phone</th><th>Outcome</th><th>Callback</th><th>When</th></tr></thead><tbody>
-            {shown.map(c => <tr key={c.id}>
+          <div className="tw"><table><thead><tr><th>Business</th><th>Contact</th><th>Phone</th><th>Outcome</th><th>Callback</th><th>When</th><th></th></tr></thead><tbody>
+            {shown.map(c => <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setSel(c)}>
               <td style={{ fontWeight: 600 }}>{c.business || '—'}<div style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 400, maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.notes}</div></td>
               <td style={{ fontSize: 12 }}>{c.contact_name || '—'}</td>
-              <td style={{ fontSize: 12 }}>{c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'var(--g-light)' }}>{c.phone}</a> : '—'}</td>
-              <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.outcome} onChange={e => upd(c.id, { outcome: e.target.value })}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></td>
-              <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.callback_date || ''} onChange={e => upd(c.id, { callback_date: e.target.value || null })} /></td>
+              <td style={{ fontSize: 12 }} onClick={e => e.stopPropagation()}>{c.phone ? <a href={`tel:${c.phone}`} style={{ color: c.outcome === 'disconnected' ? 'var(--red)' : 'var(--g-light)', textDecoration: c.outcome === 'disconnected' ? 'line-through' : 'none' }}>{c.phone}</a> : '—'}{c.outcome === 'disconnected' && <span className="bdg bdg-r" style={{ marginLeft: 6, fontSize: 9 }}>disconnected</span>}</td>
+              <td onClick={e => e.stopPropagation()}><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.outcome} onChange={e => upd(c.id, { outcome: e.target.value })}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></td>
+              <td onClick={e => e.stopPropagation()}><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.callback_date || ''} onChange={e => upd(c.id, { callback_date: e.target.value || null })} /></td>
               <td className="mono" style={{ fontSize: 11, color: 'var(--t3)' }}>{c.created_at ? formatDistanceToNow(new Date(c.created_at), { addSuffix: true }) : '—'}</td>
+              <td style={{ fontSize: 11, color: 'var(--g-light)', whiteSpace: 'nowrap' }}>Review →</td>
             </tr>)}
           </tbody></table></div>}
       </div>

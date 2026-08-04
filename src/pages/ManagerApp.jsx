@@ -4,6 +4,7 @@ import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterva
 import { supabase, createUserAccount } from '../lib/supabase'
 import { downloadProposalPptx } from '../lib/proposalPptx'
 import { CallLogs, TeamTasks, LogCall } from './CrmTools'
+import TimeClockPage, { ClockWidget } from './TimeClock'
 import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
@@ -866,6 +867,7 @@ export default function ManagerApp() {
   const [tab, setTab] = useState('dash')
   const allMenu = [
     { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+    { id: 'clock', label: 'Time Clock', icon: <Clock size={16} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={16} /> },
     { id: 'visits', label: 'All Visits', icon: <History size={16} /> },
     { id: 'locs', label: 'Customers', icon: <MapPin size={16} /> },
@@ -877,6 +879,7 @@ export default function ManagerApp() {
   ]
   const allMobile = [
     { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} /> },
+    { id: 'clock', label: 'Clock', icon: <Clock size={20} /> },
     { id: 'cal', label: 'Calendar', icon: <Calendar size={20} /> },
     { id: 'visits', label: 'Visits', icon: <History size={20} /> },
     { id: 'leads', label: 'Leads', icon: <Phone size={20} /> },
@@ -898,9 +901,11 @@ export default function ManagerApp() {
         <aside className="side">
           <div className="side-lbl">Menu</div>
           {menuItems.map(i => <button key={i.id} className={`side-btn ${tab === i.id ? 'on' : ''}`} onClick={() => setTab(i.id)}>{i.icon}{i.label}</button>)}
+          <div style={{ marginTop: 'auto', paddingTop: 12 }}><ClockWidget onPunch={() => {}} compact /></div>
         </aside>
         <main style={{ flex: 1, overflow: 'auto' }}>
           {tab === 'dash' && <Dashboard go={setTab} />}
+          {tab === 'clock' && <TimeClockPage />}
           {tab === 'cal' && <CalendarView />}
           {tab === 'visits' && <AllVisits />}
           {tab === 'locs' && !isViewer && <Locations />}
