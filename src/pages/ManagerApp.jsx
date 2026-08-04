@@ -475,6 +475,16 @@ const CALL_SCRIPTS = [
       { h: 'Objections', b: "\"What's the catch / how do you make money?\" → We keep the client relationship and a small margin for managing it and guaranteeing the work. You get paid to clean, not to sell.\n\n\"I already have enough work.\" → Perfect — that's exactly who I want in my back pocket when I'm overloaded. And if you hit a slow month, you know where to call.\n\n\"How do I know I'll get paid?\" → We invoice the client, you invoice us, net terms — in writing. Happy to start you on one small account so you can see how we operate." },
       { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a COI showing general liability (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
     ],
+    t_es: 'Limpiadores y Jardineros — Socio / Desborde',
+    sub_es: 'No es una venta — cree una red de dueños locales a quienes pasarles trabajo (y que le pasen a usted).',
+    sections_es: [
+      { h: 'Buzón de voz', b: "Hola [Name], le habla Fernando de Great Way Environmental — limpieza comercial y jardinería aquí en Stockton. Estoy contactando a otros dueños de compañías de limpieza en el área, no es para venderle nada. Creo que hay una forma en que podríamos pasarnos trabajo el uno al otro. Devuélvame la llamada cuando pueda al [number]. Gracias [Name]." },
+      { h: 'Apertura (contestan)', b: "¿Qué tal [Name]? Le habla Fernando — gerente de cuentas en Great Way Environmental, limpieza comercial y jardinería por [city]. Le voy a ser directo: no le estoy vendiendo nada. A veces me llega más trabajo del que mis cuadrillas pueden cubrir, y prefiero pasárselo a un dueño local serio que a una franquicia. Por eso quise presentarme — ¿cuánto tiempo lleva con su compañía?" },
+      { h: 'Valor — qué gana él', b: "La idea es esta: cuando ganamos un contrato que queda muy lejos o muy grande, en vez de rechazarlo se lo damos a un dueño local de confianza. Usted hace el trabajo, nosotros manejamos el cliente y la facturación, y usted consigue cuentas fijas sin tener que salir a buscarlas. Y cuando usted esté full, nos pasa trabajo de la misma forma." },
+      { h: 'Calificar', b: "¿Qué áreas cubre? … ¿Tiene su propia cuadrilla o es usted con un par de muchachos? … ¿Me puede dar un COI — responsabilidad general (general liability), y workers' comp si tiene empleados?" },
+      { h: 'Objeciones', b: "\"¿Cuál es el truco / cómo ganan ustedes?\" → Nosotros mantenemos la relación con el cliente y un pequeño margen por administrarlo y garantizar el trabajo. A usted le pagan por limpiar, no por vender.\n\n\"Ya tengo suficiente trabajo.\" → Perfecto — usted es justo la persona que quiero tener a mano cuando esté sobrecargado. Y si le llega un mes flojo, ya sabe a quién llamar.\n\n\"¿Cómo sé que me van a pagar?\" → Nosotros le facturamos al cliente, usted nos factura a nosotros, con términos por escrito. Con gusto empezamos con una cuenta pequeña para que vea cómo trabajamos." },
+      { h: 'Cierre', b: "Hagamos esto — lo agrego a nuestra red de subcontratistas. Para dejarlo todo en orden solo necesito un COI que muestre responsabilidad general (general liability) — y workers' comp si tiene empleados — y le mando un acuerdo sencillo de una página que dice que le estamos pasando trabajo a usted. ¿Le parece bien si le mando mi información y el documento por mensaje?" },
+    ],
   },
   {
     type: 'customer',
@@ -488,6 +498,16 @@ const CALL_SCRIPTS = [
       { h: 'Objections', b: "\"We're already under contract.\" → No problem — when's it up for renewal? I'll send a quick side-by-side so you're ready.\n\n\"Just send pricing.\" → Every property's different — the only way to give you a real number is a quick 10-minute walkthrough. No guessing, no obligation.\n\n\"We're happy with who we have.\" → Love that. Most of our clients were too — until one vendor for both turned out to be a lot less hassle.\n\n\"How much?\" → That's exactly what the walkthrough is for — I'd rather see the space and give you a real number than throw out a guess over the phone." },
       { h: 'Close', b: "Here's what I'd suggest: a fast 10-minute walkthrough, then I put together a bundled proposal you can review and sign online. No pressure either way. Does [day] morning or afternoon work better?" },
     ],
+    t_es: 'Clientes — Oferta Combinada (Limpieza + Jardinería)',
+    sub_es: 'Meta: agendar una visita de 10 minutos.',
+    sections_es: [
+      { h: 'Apertura', b: "Hola [Name], le habla Fernando de Great Way Environmental — nosotros manejamos tanto la limpieza comercial como la jardinería aquí en [city]. La razón de mi llamada es rápida: la mayoría de las propiedades están pagando dos proveedores distintos, uno para limpieza y otro para las áreas verdes. Nosotros combinamos los dos en un solo contrato — una sola cuadrilla, una sola factura, un solo contacto." },
+      { h: 'Valor', b: "Al combinarlo, usted deja de ser el intermediario entre el de limpieza y el de jardinería. Una sola cuadrilla, un solo contacto — si algo sale mal, llama a un solo número y se resuelve." },
+      { h: 'Prueba social', b: "Ya nos encargamos de las ubicaciones de G&C, Lexus y Hilton cerca de usted, así que de todos modos estamos por su zona cada semana." },
+      { h: 'Calificar', b: "¿Quién maneja su limpieza y jardinería ahora mismo — personal propio o contratado? … ¿Está contento con ellos, o es más bien un 'ahí va'? … ¿Cuándo se le vence el contrato actual?" },
+      { h: 'Objeciones', b: "\"Ya estamos bajo contrato.\" → No hay problema — no le estoy pidiendo que rompa nada. ¿Cuándo se le vence? Le mando una comparación rápida para que esté listo.\n\n\"Solo mándeme el precio.\" → Cada propiedad es diferente — la única forma de darle un número real es una visita rápida de 10 minutos. Sin adivinar, sin compromiso.\n\n\"Estamos contentos con los que tenemos.\" → Me encanta. La mayoría de nuestros clientes también lo estaban — hasta que tener un solo proveedor para ambas cosas les resultó mucho menos complicado.\n\n\"¿Cuánto cuesta?\" → Para eso es justamente la visita — prefiero ver el espacio y darle un número real en vez de tirar un estimado por teléfono." },
+      { h: 'Cierre', b: "Le propongo esto: una visita rápida de 10 minutos, le preparo una propuesta combinada que puede revisar y firmar en línea, y si no mejora lo que ya tiene, no pasa nada. ¿Le sirve mejor [day] por la mañana o por la tarde?" },
+    ],
   },
 ]
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s
@@ -495,7 +515,7 @@ function Leads() {
   const { profile } = useAuth()
   const canManage = profile?.role === 'manager'   // employees (viewer) can work leads but not convert/propose
   const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
-  const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null), [callLead, setCallLead] = useState(null)
+  const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null), [callLead, setCallLead] = useState(null), [scriptLang, setScriptLang] = useState('en')
   const [leadType, setLeadType] = useState('customer')  // customer | cleaner
   const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
   const [f, setF] = useState(blank)
@@ -586,17 +606,25 @@ function Leads() {
         </div>
       </div>
       {scripts && <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>📞 {leadType === 'cleaner' ? 'Cleaner / Partner' : 'Customer'} Script</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+          <div style={{ fontWeight: 700 }}>📞 {leadType === 'cleaner' ? 'Cleaner / Partner' : 'Customer'} Script</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[['en', 'EN'], ['es', 'ES']].map(([v, lb]) => <button key={v} className={`btn btn-sm ${scriptLang === v ? 'btn-p' : 'btn-g'}`} onClick={() => setScriptLang(v)}>{lb}</button>)}
+          </div>
+        </div>
         <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number]. Never quote a price — book the walkthrough first. "Copy all" grabs the whole script.</p>
         {CALL_SCRIPTS.filter(s => s.type === leadType).map((s, i) => {
-          const full = `${s.t}\n\n` + s.sections.map(x => `${x.h}:\n${x.b}`).join('\n\n')
+          const secs = scriptLang === 'es' ? (s.sections_es || s.sections) : s.sections
+          const title = scriptLang === 'es' ? (s.t_es || s.t) : s.t
+          const sub = scriptLang === 'es' ? (s.sub_es || s.sub) : s.sub
+          const full = `${title}\n\n` + secs.map(x => `${x.h}:\n${x.b}`).join('\n\n')
           return (
             <div key={i} style={{ borderTop: i ? '1px solid var(--bd)' : 'none', paddingTop: i ? 14 : 0, marginTop: i ? 14 : 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
-                <div><div style={{ fontWeight: 700, fontSize: 14 }}>{s.t}</div><div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{s.sub}</div></div>
+                <div><div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div><div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{sub}</div></div>
                 <button className="btn btn-g btn-sm" style={{ flexShrink: 0 }} onClick={() => { try { navigator.clipboard.writeText(full) } catch { } setScriptCopied(i); setTimeout(() => setScriptCopied(null), 1500) }}>{scriptCopied === i ? 'Copied!' : 'Copy all'}</button>
               </div>
-              {s.sections.map((x, j) => (
+              {secs.map((x, j) => (
                 <div key={j} style={{ marginBottom: 8 }}>
                   <div className="sec-t" style={{ marginBottom: 4 }}>{x.h}</div>
                   <div style={{ fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-line', background: 'var(--bg3)', padding: '10px 12px', borderRadius: 'var(--r)' }}>{x.b}</div>

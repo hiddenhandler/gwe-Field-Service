@@ -30,6 +30,27 @@ const SCRIPTS = {
   ],
 }
 
+/* ── Spanish scripts (same structure) ── */
+const SCRIPTS_ES = {
+  cleaner: [
+    { h: 'Buzón de voz', b: "Hola [Name], le habla Fernando de Great Way Environmental — limpieza comercial y jardinería aquí en Stockton. Estoy contactando a otros dueños de compañías de limpieza en el área, no es para venderle nada. Creo que hay una forma en que podríamos pasarnos trabajo el uno al otro. Devuélvame la llamada cuando pueda al [number]. Gracias [Name]." },
+    { h: 'Apertura (contestan)', b: "¿Qué tal [Name]? Le habla Fernando — gerente de cuentas en Great Way Environmental, limpieza comercial y jardinería por [city]. Le voy a ser directo: no le estoy vendiendo nada. A veces me llega más trabajo del que mis cuadrillas pueden cubrir, y prefiero pasárselo a un dueño local serio que a una franquicia. Por eso quise presentarme — ¿cuánto tiempo lleva con su compañía?" },
+    { h: 'Valor', b: "La idea es esta: cuando ganamos un contrato que queda muy lejos o muy grande, en vez de rechazarlo se lo damos a un dueño local de confianza. Usted hace el trabajo, nosotros manejamos el cliente y la facturación, y usted consigue cuentas fijas sin tener que salir a buscarlas. Y cuando usted esté full, nos pasa trabajo de la misma forma." },
+    { h: 'Calificar', b: "Qué bueno, bastante tiempo. ¿Usted es el dueño y también está en el campo, o tiene un equipo manejándolo? … ¿Qué áreas cubre? … ¿Está rechazando trabajo estos días, o busca más? … ¿Me puede dar un COI — responsabilidad general (general liability), y workers' comp si tiene empleados? … ¿Tiene a alguien detrás para quedarse con esto algún día, o prácticamente es usted quien lo sostiene todo?" },
+    { h: 'Objeciones', b: "\"¿Cuál es el truco / cómo ganan ustedes?\" → Nosotros mantenemos la relación con el cliente y un pequeño margen por administrarlo y garantizar el trabajo. A usted le pagan por limpiar, no por vender.\n\n\"Ya tengo suficiente trabajo.\" → Perfecto — usted es justo la persona que quiero tener a mano cuando esté sobrecargado. Y si le llega un mes flojo, ya sabe a quién llamar.\n\n\"¿Cómo sé que me van a pagar?\" → Nosotros le facturamos al cliente, usted nos factura a nosotros, con términos por escrito. Con gusto empezamos con una cuenta pequeña para que vea cómo trabajamos." },
+    { h: 'Cierre', b: "Hagamos esto — lo agrego a nuestra red de subcontratistas. Para dejarlo todo en orden solo necesito un COI que muestre responsabilidad general (general liability) — y workers' comp si tiene empleados — y le mando un acuerdo sencillo de una página que dice que le estamos pasando trabajo a usted. ¿Le parece bien si le mando mi información y el documento por mensaje?" },
+  ],
+  customer: [
+    { h: 'Apertura', b: "Hola [Name], le habla Fernando de Great Way Environmental — nosotros manejamos tanto la limpieza comercial como la jardinería aquí en [city]. La razón de mi llamada es rápida: la mayoría de las propiedades están pagando dos proveedores distintos, uno para limpieza y otro para las áreas verdes. Nosotros combinamos los dos en un solo contrato — una sola cuadrilla, una sola factura, un solo contacto." },
+    { h: 'Valor', b: "Al combinarlo, usted deja de ser el intermediario entre el de limpieza y el de jardinería. Una sola cuadrilla, un solo contacto — si algo sale mal, llama a un solo número y se resuelve." },
+    { h: 'Prueba social', b: "Ya nos encargamos de las ubicaciones de G&C, Lexus y Hilton cerca de usted, así que de todos modos estamos por su zona cada semana." },
+    { h: 'Calificar', b: "¿Quién maneja su limpieza y jardinería ahora mismo — personal propio o contratado? … ¿Está contento con ellos, o es más bien un 'ahí va'? … ¿Cuándo se le vence el contrato actual?" },
+    { h: 'Objeciones', b: "\"Ya estamos bajo contrato.\" → No hay problema — no le estoy pidiendo que rompa nada. ¿Cuándo se le vence? Le mando una comparación rápida para que esté listo.\n\n\"Solo mándeme el precio.\" → Cada propiedad es diferente — la única forma de darle un número real es una visita rápida de 10 minutos. Sin adivinar, sin compromiso.\n\n\"Estamos contentos con los que tenemos.\" → Me encanta. La mayoría de nuestros clientes también lo estaban — hasta que tener un solo proveedor para ambas cosas les resultó mucho menos complicado.\n\n\"¿Cuánto cuesta?\" → Para eso es justamente la visita — prefiero ver el espacio y darle un número real en vez de tirar un estimado por teléfono." },
+    { h: 'Cierre', b: "Le propongo esto: una visita rápida de 10 minutos, le preparo una propuesta combinada que puede revisar y firmar en línea, y si no mejora lo que ya tiene, no pasa nada. ¿Le sirve mejor [day] por la mañana o por la tarde?" },
+  ],
+}
+const SCRIPT_SETS = { en: SCRIPTS, es: SCRIPTS_ES }
+
 /* ═══ GUIDED CALL INTAKE MODAL (launch from a lead's "Log Call") ═══ */
 export function LogCall({ lead, onClose, onSaved }) {
   const { profile } = useAuth()
@@ -44,6 +65,7 @@ export function LogCall({ lead, onClose, onSaved }) {
   })
   const [busy, setBusy] = useState(false)
   const [showScript, setShowScript] = useState(true)
+  const [lang, setLang] = useState('en')
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
@@ -135,9 +157,14 @@ export function LogCall({ lead, onClose, onSaved }) {
         <div className="fg2">
           <div>
             <div style={{ marginBottom: 14 }}>
-              <div className="sec-t" style={{ marginBottom: 6 }}>📖 {isCleaner ? 'Cleaner / Partner' : 'Customer'} Script — read aloud</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8, flexWrap: 'wrap' }}>
+                <div className="sec-t">📖 {isCleaner ? 'Cleaner / Partner' : 'Customer'} Script — read aloud</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[['en', 'EN'], ['es', 'ES']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${lang === v ? 'btn-p' : 'btn-g'}`} onClick={() => setLang(v)}>{lb}</button>)}
+                </div>
+              </div>
               <div className="card" style={{ maxHeight: 340, overflowY: 'auto', background: 'rgba(74,158,255,.06)', border: '1px solid rgba(74,158,255,.22)' }}>
-                {(isCleaner ? SCRIPTS.cleaner : SCRIPTS.customer).map((s, i) => (
+                {SCRIPT_SETS[lang][isCleaner ? 'cleaner' : 'customer'].map((s, i) => (
                   <div key={i} style={{ marginBottom: 10 }}>
                     <div className="sec-t" style={{ marginBottom: 3, color: 'var(--blue)' }}>{s.h}</div>
                     <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{s.b}</div>
