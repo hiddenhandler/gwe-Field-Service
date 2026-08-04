@@ -2,19 +2,23 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
 import { format, formatDistanceToNow } from 'date-fns'
-import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2, Trash2 } from 'lucide-react'
+import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2, Trash2, Bell } from 'lucide-react'
 
 const cap = s => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : s
 const OUTCOMES = ['connected', 'interested', 'callback', 'voicemail', 'no_answer', 'left_message', 'disconnected', 'not_interested']
+// outcomes that should auto-schedule a follow-up call
+const AUTO_CB = ['voicemail', 'no_answer', 'callback']
+// next business day (skips Sat/Sun) as yyyy-MM-dd — used for auto callbacks
+const nextBiz = () => { const d = new Date(); d.setDate(d.getDate() + 1); const g = d.getDay(); if (g === 6) d.setDate(d.getDate() + 2); else if (g === 0) d.setDate(d.getDate() + 1); return format(d, 'yyyy-MM-dd') }
 
 const SCRIPTS = {
   cleaner: [
     { h: 'Voicemail', b: "Hi [Name], this is Fernando from Great Way Environmental — commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you. I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name]." },
     { h: 'Opener (they pick up)', b: "Hey [Name], Fernando here — account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?" },
     { h: 'Value', b: "Here's the idea: when we win a contract that's too far or too big, instead of turning it down we sub it to a trusted local owner. You do the work, we handle the client and the billing, and you get steady accounts without chasing them. When you're slammed, you send us the same way." },
-    { h: 'Qualify', b: "Nice, that's a long time. Are you the owner and out in the field too, or do you have a team running it? … What areas do you cover? … Are you turning work away these days, or hungry for more? … You carry general liability, right? And workers' comp if you've got employees? … Do you have someone coming up behind you to take it over eventually, or is it pretty much you holding it together?" },
+    { h: 'Qualify', b: "Nice, that's a long time. Are you the owner and out in the field too, or do you have a team running it? … What areas do you cover? … Are you turning work away these days, or hungry for more? … Can you provide a COI — general liability, and workers' comp if you've got employees? … Do you have someone coming up behind you to take it over eventually, or is it pretty much you holding it together?" },
     { h: 'Objections', b: "\"What's the catch / how do you make money?\" → We keep the client relationship and a small margin for managing it and guaranteeing the work. You get paid to clean, not to sell.\n\n\"I already have enough work.\" → Perfect — that's exactly who I want in my back pocket when I'm overloaded. And if you hit a slow month, you know where to call.\n\n\"How do I know I'll get paid?\" → We invoice the client, you invoice us, net terms — in writing. Happy to start you on one small account so you can see how we operate." },
-    { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a certificate of insurance (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
+    { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a COI showing general liability (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
   ],
   customer: [
     { h: 'Opener', b: "Hi [Name], this is Fernando with Great Way Environmental — we handle both commercial janitorial and landscaping out of [city]. Quick reason for the call: most properties are paying two separate vendors for cleaning and grounds. We bundle both under one contract — one crew, one invoice, one point of contact." },
@@ -62,6 +66,7 @@ export function LogCall({ lead, onClose, onSaved }) {
 
   const save = async () => {
     setBusy(true)
+    const cbDate = f.callback_date || (AUTO_CB.includes(f.outcome) ? nextBiz() : '')
     const stamp = `[${format(new Date(), 'MMM d')}] ${notePreview}`
     const newStatus = f.outcome === 'not_interested' ? 'lost' : 'contacted'
     let target = lead || picked || null
@@ -71,18 +76,18 @@ export function LogCall({ lead, onClose, onSaved }) {
       const { data: nl } = await supabase.from('leads').insert({
         name: f.business || f.contact_name || 'New lead', company: f.business || null, contact_person: f.contact_name || null,
         phone: f.phone || null, email: f.email || null, lead_type: newType, source: 'Call log',
-        status: newStatus, callback_date: f.callback_date || null, notes: stamp,
+        status: newStatus, callback_date: cbDate || null, notes: stamp,
         ...(newType === 'cleaner' ? { has_employees: f.has_employees, gl_received: f.gl, wc_received: f.wc } : {}),
       }).select().single()
       leadId = nl?.id || null; target = null // already populated at insert
     }
     await supabase.from('call_logs').insert({
       lead_id: leadId, business: f.business, contact_name: f.contact_name, phone: f.phone, email: f.email,
-      purpose: f.purpose, outcome: f.outcome, callback_date: f.callback_date || null, notes: notePreview, agent: profile?.id || null,
+      purpose: f.purpose, outcome: f.outcome, callback_date: cbDate || null, notes: notePreview, agent: profile?.id || null,
     })
     // update an attached/existing lead
     if (target?.id) {
-      const patch = { status: newStatus, callback_date: f.callback_date || target.callback_date || null, contact_person: f.contact_name || target.contact_person, notes: [target.notes, stamp].filter(Boolean).join('\n') }
+      const patch = { status: newStatus, callback_date: cbDate || target.callback_date || null, contact_person: f.contact_name || target.contact_person, notes: [target.notes, stamp].filter(Boolean).join('\n') }
       if (isCleaner) { patch.has_employees = f.has_employees; patch.gl_received = f.gl; patch.wc_received = f.wc }
       await supabase.from('leads').update(patch).eq('id', target.id)
     }
@@ -149,7 +154,7 @@ export function LogCall({ lead, onClose, onSaved }) {
             <Q prompt="Best number to reach you?"><input className="inp" value={f.phone} onChange={e => set('phone', e.target.value)} /></Q>
             <Q prompt="Email to send info to?" opt><input className="inp" value={f.email} onChange={e => set('email', e.target.value)} /></Q>
             {isCleaner && <div style={{ borderLeft: '3px solid var(--yellow)', paddingLeft: 12, marginBottom: 14 }}>
-              <div style={{ fontSize: 13, fontStyle: 'italic', marginBottom: 8 }}>“Do you have employees, and do you carry insurance?”</div>
+              <div style={{ fontSize: 13, fontStyle: 'italic', marginBottom: 8 }}>“Can you provide a COI — general liability, and workers' comp if you have employees?”</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <button type="button" className={`btn btn-sm ${f.has_employees ? 'btn-p' : 'btn-g'}`} onClick={() => set('has_employees', !f.has_employees)}>{f.has_employees ? '✓ Has employees' : 'No employees'}</button>
                 <button type="button" className={`btn btn-sm ${f.gl ? 'btn-p' : 'btn-g'}`} onClick={() => set('gl', !f.gl)}>{f.gl ? '✓ GL' : 'GL?'}</button>
@@ -157,7 +162,7 @@ export function LogCall({ lead, onClose, onSaved }) {
               </div>
             </div>}
             <div className="fg2" style={{ marginBottom: 14 }}>
-              <div className="field"><label className="field-lbl">Outcome</label><select className="inp" value={f.outcome} onChange={e => set('outcome', e.target.value)}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></div>
+              <div className="field"><label className="field-lbl">Outcome</label><select className="inp" value={f.outcome} onChange={e => { const v = e.target.value; setF(p => ({ ...p, outcome: v, callback_date: (!p.callback_date && AUTO_CB.includes(v)) ? nextBiz() : p.callback_date })) }}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></div>
               <div className="field"><label className="field-lbl">Callback date</label><input type="date" className="inp" value={f.callback_date} onChange={e => set('callback_date', e.target.value)} /></div>
             </div>
             <div className="field"><label className="field-lbl">Notes</label><textarea className="inp" rows={3} style={{ resize: 'vertical' }} value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="Anything else worth logging…" /></div>
@@ -217,8 +222,11 @@ export function CallLogs() {
   const load = async () => { const { data } = await supabase.from('call_logs').select('*').order('created_at', { ascending: false }).limit(500); setCalls(data || []); setBusy(false) }
   useEffect(() => { load() }, [])
   const upd = async (id, patch) => { await supabase.from('call_logs').update(patch).eq('id', id); load() }
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const isDue = c => c.callback_date && c.callback_date <= today && !['not_interested', 'disconnected'].includes(c.outcome)
+  const due = calls.filter(isDue).sort((a, b) => (a.callback_date || '').localeCompare(b.callback_date || ''))
   const counts = OUTCOMES.reduce((a, o) => ({ ...a, [o]: calls.filter(c => c.outcome === o).length }), {})
-  let shown = filter === 'all' ? calls : calls.filter(c => c.outcome === filter)
+  let shown = filter === 'all' ? calls : filter === 'due' ? calls.filter(isDue) : calls.filter(c => c.outcome === filter)
   if (q) { const s = q.toLowerCase(); shown = shown.filter(c => (c.business + ' ' + (c.contact_name || '') + ' ' + (c.phone || '') + ' ' + (c.notes || '')).toLowerCase().includes(s)) }
 
   return (
@@ -229,8 +237,20 @@ export function CallLogs() {
         <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Call Logs</h1><p style={{ color: 'var(--t2)', fontSize: 13, marginTop: 2 }}>{calls.length} total · {shown.length} shown</p></div>
         <div style={{ display: 'flex', gap: 8 }}><button className="btn btn-p" onClick={() => setModal(true)}><Plus size={13} /> New Call</button><button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /></button></div>
       </div>
+      {due.length > 0 && <div className="alrt" style={{ display: 'block', background: 'rgba(212,160,23,.08)', border: '1px solid rgba(212,160,23,.25)', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--yellow)', marginBottom: 8 }}><Bell size={14} /> {due.length} callback{due.length > 1 ? 's' : ''} due — call these clients back</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {due.slice(0, 6).map(c => (
+            <button key={c.id} onClick={() => setSel(c)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: 'var(--bg3)', border: 'none', borderRadius: 6, padding: '7px 10px', cursor: 'pointer', textAlign: 'left', color: 'var(--t1)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{c.business || c.contact_name || 'Lead'} <span style={{ color: 'var(--t3)', fontWeight: 400 }}>· {c.phone || 'no phone'}</span></span>
+              <span style={{ fontSize: 12, color: c.callback_date < today ? 'var(--red)' : 'var(--yellow)', whiteSpace: 'nowrap' }}>{c.callback_date < today ? 'overdue' : 'due'} {c.callback_date}</span>
+            </button>
+          ))}
+          {due.length > 6 && <button className="btn btn-g btn-sm" style={{ alignSelf: 'flex-start', marginTop: 2 }} onClick={() => setFilter('due')}>View all {due.length}</button>}
+        </div>
+      </div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        {['all', ...OUTCOMES].map(o => <button key={o} className={`btn btn-sm ${filter === o ? 'btn-p' : 'btn-g'}`} onClick={() => setFilter(o)}>{cap(o)}{o !== 'all' ? ` (${counts[o] || 0})` : ` (${calls.length})`}</button>)}
+        {['all', 'due', ...OUTCOMES].map(o => <button key={o} className={`btn btn-sm ${filter === o ? 'btn-p' : 'btn-g'}`} onClick={() => setFilter(o)}>{o === 'due' ? '🔔 Due' : cap(o)}{o === 'all' ? ` (${calls.length})` : o === 'due' ? ` (${due.length})` : ` (${counts[o] || 0})`}</button>)}
       </div>
       <input className="inp" placeholder="Search name, caller, phone, notes…" value={q} onChange={e => setQ(e.target.value)} style={{ marginBottom: 12 }} />
       <div className="card card-f">
@@ -240,7 +260,7 @@ export function CallLogs() {
               <td style={{ fontWeight: 600 }}>{c.business || '—'}<div style={{ fontSize: 11, color: 'var(--t3)', fontWeight: 400, maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.notes}</div></td>
               <td style={{ fontSize: 12 }}>{c.contact_name || '—'}</td>
               <td style={{ fontSize: 12 }} onClick={e => e.stopPropagation()}>{c.phone ? <a href={`tel:${c.phone}`} style={{ color: c.outcome === 'disconnected' ? 'var(--red)' : 'var(--g-light)', textDecoration: c.outcome === 'disconnected' ? 'line-through' : 'none' }}>{c.phone}</a> : '—'}{c.outcome === 'disconnected' && <span className="bdg bdg-r" style={{ marginLeft: 6, fontSize: 9 }}>disconnected</span>}</td>
-              <td onClick={e => e.stopPropagation()}><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.outcome} onChange={e => upd(c.id, { outcome: e.target.value })}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></td>
+              <td onClick={e => e.stopPropagation()}><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.outcome} onChange={e => { const v = e.target.value; const patch = { outcome: v }; if (!c.callback_date && AUTO_CB.includes(v)) patch.callback_date = nextBiz(); upd(c.id, patch) }}>{OUTCOMES.map(o => <option key={o} value={o}>{cap(o)}</option>)}</select></td>
               <td onClick={e => e.stopPropagation()}><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={c.callback_date || ''} onChange={e => upd(c.id, { callback_date: e.target.value || null })} /></td>
               <td className="mono" style={{ fontSize: 11, color: 'var(--t3)' }}>{c.created_at ? formatDistanceToNow(new Date(c.created_at), { addSuffix: true }) : '—'}</td>
               <td style={{ fontSize: 11, color: 'var(--g-light)', whiteSpace: 'nowrap' }}>Review →</td>

@@ -471,9 +471,9 @@ const CALL_SCRIPTS = [
       { h: 'Voicemail', b: "Hi [Name], this is Fernando from Great Way Environmental — commercial cleaning and landscaping out of Stockton. I'm reaching out to other cleaning owners in the area, nothing to sell you. I think there's a way we could send each other work. Call me back when you get a sec at [number]. Thanks [Name]." },
       { h: 'Opener (they pick up)', b: "Hey [Name], Fernando here — account manager at Great Way Environmental, commercial cleaning and landscaping over in [city]. I'll be straight with you: I'm not selling anything. I run into more work than my crews can cover sometimes, and I'd rather hand it to a solid local owner than a franchise. Figured it was worth introducing myself — how long have you been running your shop?" },
       { h: "Value — what's in it for them", b: "Here's the idea: when we win a contract that's too far or too big, instead of turning it down we sub it to a trusted local owner. You do the work, we handle the client and the billing, and you get steady accounts without chasing them. When you're slammed, you send us work the same way." },
-      { h: 'Qualify', b: "What areas do you cover? … Do you run your own crew or is it just you and a couple guys? … You carry general liability, right? And workers' comp if you've got employees?" },
+      { h: 'Qualify', b: "What areas do you cover? … Do you run your own crew or is it just you and a couple guys? … Can you provide a COI — general liability, and workers' comp if you've got employees?" },
       { h: 'Objections', b: "\"What's the catch / how do you make money?\" → We keep the client relationship and a small margin for managing it and guaranteeing the work. You get paid to clean, not to sell.\n\n\"I already have enough work.\" → Perfect — that's exactly who I want in my back pocket when I'm overloaded. And if you hit a slow month, you know where to call.\n\n\"How do I know I'll get paid?\" → We invoice the client, you invoice us, net terms — in writing. Happy to start you on one small account so you can see how we operate." },
-      { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a certificate of insurance (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
+      { h: 'Close', b: "Let's do this — I'll add you to our sub network. To keep it clean I just need a COI showing general liability (and workers' comp if you have employees), and I'll send a simple one-page agreement that says we're subbing work to you. Cool if I text you my info and the doc?" },
     ],
   },
   {
@@ -865,6 +865,20 @@ export default function ManagerApp() {
   const { profile } = useAuth()
   const isViewer = profile?.role === 'viewer'
   const [tab, setTab] = useState('dash')
+  // badge: open team tasks assigned to me (in-app "you've been assigned" notification)
+  const [taskBadge, setTaskBadge] = useState(0)
+  useEffect(() => {
+    if (!profile?.id) return
+    let live = true
+    const loadBadge = async () => {
+      const { count } = await supabase.from('team_tasks').select('*', { count: 'exact', head: true }).eq('assignee', profile.id).neq('status', 'done')
+      if (live) setTaskBadge(count || 0)
+    }
+    loadBadge()
+    const iv = setInterval(loadBadge, 60000)
+    return () => { live = false; clearInterval(iv) }
+  }, [profile?.id, tab])
+  const Badge = ({ n }) => n > 0 ? <span style={{ marginLeft: 'auto', background: 'var(--g)', color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 10, padding: '1px 7px', lineHeight: 1.6 }}>{n}</span> : null
   const allMenu = [
     { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
     { id: 'clock', label: 'Time Clock', icon: <Clock size={16} /> },
@@ -900,7 +914,7 @@ export default function ManagerApp() {
       <div className="app-body" style={{ display: 'flex', flex: 1 }}>
         <aside className="side">
           <div className="side-lbl">Menu</div>
-          {menuItems.map(i => <button key={i.id} className={`side-btn ${tab === i.id ? 'on' : ''}`} onClick={() => setTab(i.id)}>{i.icon}{i.label}</button>)}
+          {menuItems.map(i => <button key={i.id} className={`side-btn ${tab === i.id ? 'on' : ''}`} onClick={() => setTab(i.id)}>{i.icon}{i.label}{i.id === 'ttasks' && <Badge n={taskBadge} />}</button>)}
           <div style={{ marginTop: 'auto', paddingTop: 12 }}><ClockWidget onPunch={() => {}} compact /></div>
         </aside>
         <main style={{ flex: 1, overflow: 'auto' }}>
@@ -917,7 +931,7 @@ export default function ManagerApp() {
         </main>
       </div>
       <nav className="tabs">
-        {mobileItems.map(i => <button key={i.id} className={tab === i.id ? 'on' : ''} onClick={() => setTab(i.id)}>{i.icon}{i.label}</button>)}
+        {mobileItems.map(i => <button key={i.id} className={tab === i.id ? 'on' : ''} onClick={() => setTab(i.id)} style={{ position: 'relative' }}>{i.icon}{i.label}{i.id === 'ttasks' && taskBadge > 0 && <span style={{ position: 'absolute', top: 2, right: '50%', marginRight: -18, background: 'var(--g)', color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 10, padding: '0 5px' }}>{taskBadge}</span>}</button>)}
       </nav>
     </div>
   )
