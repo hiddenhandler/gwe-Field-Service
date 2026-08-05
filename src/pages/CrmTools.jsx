@@ -57,10 +57,11 @@ export function LogCall({ lead, onClose, onSaved }) {
   const [leadMode, setLeadMode] = useState(lead ? 'attached' : 'new') // attached | existing | new | none
   const [leadQ, setLeadQ] = useState(''), [leadHits, setLeadHits] = useState([]), [picked, setPicked] = useState(lead || null), [newType, setNewType] = useState('cleaner')
   const activeLead = lead || picked
-  const isCleaner = (activeLead?.lead_type || (leadMode === 'new' ? newType : null)) === 'cleaner'
+  const partnerType = activeLead?.lead_type || (leadMode === 'new' ? newType : null)
+  const isCleaner = partnerType === 'cleaner' || partnerType === 'landscaper'  // both are sub/partner (same script)
   const [f, setF] = useState({
     business: lead?.name || '', contact_name: lead?.contact_person || '', phone: lead?.phone || '', email: lead?.email || '',
-    purpose: (lead?.lead_type === 'cleaner') ? 'Partner / overflow outreach' : 'Bundle pitch', outcome: 'connected', callback_date: '', notes: '',
+    purpose: ['cleaner', 'landscaper'].includes(lead?.lead_type) ? 'Partner / overflow outreach' : 'Bundle pitch', outcome: 'connected', callback_date: '', notes: '',
     has_employees: !!lead?.has_employees, gl: !!lead?.gl_received, wc: !!lead?.wc_received,
   })
   const [busy, setBusy] = useState(false)
@@ -99,7 +100,7 @@ export function LogCall({ lead, onClose, onSaved }) {
         name: f.business || f.contact_name || 'New lead', company: f.business || null, contact_person: f.contact_name || null,
         phone: f.phone || null, email: f.email || null, lead_type: newType, source: 'Call log',
         status: newStatus, callback_date: cbDate || null, notes: stamp,
-        ...(newType === 'cleaner' ? { has_employees: f.has_employees, gl_received: f.gl, wc_received: f.wc } : {}),
+        ...(['cleaner', 'landscaper'].includes(newType) ? { has_employees: f.has_employees, gl_received: f.gl, wc_received: f.wc } : {}),
       }).select().single()
       leadId = nl?.id || null; target = null // already populated at insert
     }
@@ -139,7 +140,7 @@ export function LogCall({ lead, onClose, onSaved }) {
               <button key={v} type="button" className={`btn btn-sm ${leadMode === v ? 'btn-p' : 'btn-g'}`} onClick={() => { setLeadMode(v); setPicked(null) }}>{lb}</button>)}
           </div>
           {leadMode === 'new' && <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {[['cleaner', 'Cleaner'], ['customer', 'Customer']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${newType === v ? 'btn-p' : 'btn-g'}`} onClick={() => setNewType(v)}>{lb}</button>)}
+            {[['cleaner', 'Janitorial'], ['landscaper', 'Landscaping'], ['customer', 'Customer']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${newType === v ? 'btn-p' : 'btn-g'}`} onClick={() => setNewType(v)}>{lb}</button>)}
             <span style={{ fontSize: 11, color: 'var(--t3)' }}>New lead uses the name / phone you enter below.</span>
           </div>}
           {leadMode === 'existing' && (picked ? (

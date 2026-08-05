@@ -602,18 +602,18 @@ function Leads() {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-g" onClick={() => setScripts(!scripts)}><Phone size={13} /> {scripts ? 'Hide Scripts' : 'Call Scripts'}</button>
-          <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Cleaner' : 'Customer'}</>}</button>
+          <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Janitorial' : leadType === 'landscaper' ? 'Landscaper' : 'Customer'}</>}</button>
         </div>
       </div>
       {scripts && <div className="card" style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-          <div style={{ fontWeight: 700 }}>📞 {leadType === 'cleaner' ? 'Cleaner / Partner' : 'Customer'} Script</div>
+          <div style={{ fontWeight: 700 }}>📞 {leadType === 'customer' ? 'Customer' : 'Partner'} Script{leadType === 'landscaper' ? ' (Landscaping)' : leadType === 'cleaner' ? ' (Janitorial)' : ''}</div>
           <div style={{ display: 'flex', gap: 4 }}>
             {[['en', 'EN'], ['es', 'ES']].map(([v, lb]) => <button key={v} className={`btn btn-sm ${scriptLang === v ? 'btn-p' : 'btn-g'}`} onClick={() => setScriptLang(v)}>{lb}</button>)}
           </div>
         </div>
         <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Swap [Name], [city], [number]. Never quote a price — book the walkthrough first. "Copy all" grabs the whole script.</p>
-        {CALL_SCRIPTS.filter(s => s.type === leadType).map((s, i) => {
+        {CALL_SCRIPTS.filter(s => s.type === (leadType === 'customer' ? 'customer' : 'cleaner')).map((s, i) => {
           const secs = scriptLang === 'es' ? (s.sections_es || s.sections) : s.sections
           const title = scriptLang === 'es' ? (s.t_es || s.t) : s.t
           const sub = scriptLang === 'es' ? (s.sub_es || s.sub) : s.sub
@@ -634,9 +634,9 @@ function Leads() {
           )
         })}
       </div>}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        {[['customer', 'Customers'], ['cleaner', 'Cleaners']].map(([v, lb]) => (
-          <button key={v} className={`btn btn-sm ${leadType === v ? 'btn-p' : 'btn-g'}`} style={{ flex: 1 }} onClick={() => { setLeadType(v); setSel(null); setFilter('all') }}>{lb} ({leads.filter(l => (l.lead_type || 'customer') === v).length})</button>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {[['customer', 'Customers'], ['cleaner', 'Janitorial'], ['landscaper', 'Landscaping']].map(([v, lb]) => (
+          <button key={v} className={`btn btn-sm ${leadType === v ? 'btn-p' : 'btn-g'}`} style={{ flex: 1, minWidth: 90 }} onClick={() => { setLeadType(v); setSel(null); setFilter('all') }}>{lb} ({leads.filter(l => (l.lead_type || 'customer') === v).length})</button>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
