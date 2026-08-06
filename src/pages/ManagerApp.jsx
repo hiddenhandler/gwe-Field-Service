@@ -421,6 +421,13 @@ function Crew() {
   }
   const changeRole = async (p, role) => { await supabase.rpc('set_user_role', { target: p.id, new_role: role }); load() }
   const changeService = async (p, svc) => { await supabase.rpc('set_user_service', { target: p.id, svc }); load() }
+  const del = async (p) => {
+    setErr(''); setOk('')
+    if (!window.confirm(`Permanently delete ${p.full_name}'s account and disconnect them completely?\n\nThis removes their login, visits, time punches and cannot be undone.`)) return
+    const { error } = await supabase.rpc('admin_delete_user', { target: p.id })
+    if (error) { setErr(error.message); return }
+    setOk(`${p.full_name}'s account was deleted and fully disconnected.`); load()
+  }
 
   return (
     <div className="pg">
@@ -441,7 +448,7 @@ function Crew() {
         <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Create Account'}</button>
       </form></div>}
       <div className="card card-f">
-        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : people.length === 0 ? <div className="empty"><Users size={24} /><p>No accounts yet</p></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Service Line</th><th>Since</th></tr></thead><tbody>
+        {busy ? <div className="loader"><div className="spin spin-lg" /></div> : people.length === 0 ? <div className="empty"><Users size={24} /><p>No accounts yet</p></div> : <div className="tw"><table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Service Line</th><th>Since</th><th></th></tr></thead><tbody>
           {people.map(c => <tr key={c.id}>
             <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="av">{c.full_name?.[0]}</div><span style={{ fontWeight: 600 }}>{c.full_name}</span></div></td>
             <td style={{ fontSize: 12 }}>{c.email}</td>
@@ -453,6 +460,7 @@ function Crew() {
               <option value="">All services</option><option value="Janitorial">Janitorial</option><option value="Landscaping">Landscaping</option>
             </select></td>
             <td className="mono" style={{ fontSize: 11 }}>{c.created_at ? format(new Date(c.created_at), 'MMM d, yyyy') : '—'}</td>
+            <td><button className="btn btn-d btn-sm" title={`Delete ${c.full_name}`} onClick={() => del(c)}><Trash2 size={12} /></button></td>
           </tr>)}
         </tbody></table></div>}
       </div>
