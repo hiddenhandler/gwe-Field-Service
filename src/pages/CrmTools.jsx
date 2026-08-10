@@ -51,6 +51,14 @@ const SCRIPTS_ES = {
 }
 const SCRIPT_SETS = { en: SCRIPTS, es: SCRIPTS_ES }
 
+/* question wrapper — defined at module scope so inputs keep focus while typing */
+const Q = ({ prompt, children, opt }) => (
+  <div style={{ borderLeft: '3px solid var(--yellow)', paddingLeft: 12, marginBottom: 14 }}>
+    <div style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--t1)', marginBottom: 6 }}>“{prompt}” {opt && <span style={{ color: 'var(--t3)', fontStyle: 'normal' }}>(optional)</span>}</div>
+    {children}
+  </div>
+)
+
 /* ═══ GUIDED CALL INTAKE MODAL (launch from a lead's "Log Call") ═══ */
 export function LogCall({ lead, onClose, onSaved }) {
   const { profile } = useAuth()
@@ -116,13 +124,6 @@ export function LogCall({ lead, onClose, onSaved }) {
     }
     setBusy(false); onSaved && onSaved(); onClose()
   }
-
-  const Q = ({ prompt, children, opt }) => (
-    <div style={{ borderLeft: '3px solid var(--yellow)', paddingLeft: 12, marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--t1)', marginBottom: 6 }}>“{prompt}” {opt && <span style={{ color: 'var(--t3)', fontStyle: 'normal' }}>(optional)</span>}</div>
-      {children}
-    </div>
-  )
 
   return (
     <div className="modal-ov" onClick={onClose}>
