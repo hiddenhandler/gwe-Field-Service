@@ -112,7 +112,7 @@ function Dashboard({ go }) {
             {leads.length === 0 ? <div className="empty" style={{ padding: 26 }}><Phone size={22} /><p>No leads yet</p></div> :
               leads.map(l => (
                 <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--bd)', fontSize: 13 }}>
-                  <div><div style={{ fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.lead_type === 'cleaner' ? 'Cleaner' : 'Customer'}{l.company ? ` · ${l.company}` : ''}</div></div>
+                  <div><div style={{ fontWeight: 600 }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.lead_type === 'cleaner' ? 'Janitorial' : l.lead_type === 'landscaper' ? 'Landscaping' : 'Customer'}{l.company ? ` · ${l.company}` : ''}</div></div>
                   <span className={`bdg ${l.status === 'won' ? 'bdg-g' : l.status === 'lost' ? 'bdg-r' : 'bdg-x'}`}>{l.status}</span>
                 </div>
               ))}
@@ -404,6 +404,7 @@ function Locations() {
 
 /* ═══ CREW / ACCOUNTS ═══ */
 const ROLE_LABEL = { manager: 'Manager', subcontractor: 'Crew', viewer: 'Employee' }
+const Badge = ({ n }) => n > 0 ? <span style={{ marginLeft: 'auto', background: 'var(--g)', color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 10, padding: '1px 7px', lineHeight: 1.6 }}>{n}</span> : null
 function Crew() {
   const [people, setPeople] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [err, setErr] = useState(''), [ok, setOk] = useState('')
   const [f, setF] = useState({ full_name: '', email: '', password: '', phone: '', role: 'subcontractor' })
@@ -587,8 +588,9 @@ function Leads() {
     const { data, error } = await createUserAccount({ email: sel.email, password: pw, full_name: sel.company || sel.name, role: 'subcontractor', phone: sel.phone || '' })
     if (error) { setCrewMsg(error.message); setConverting(false); return }
     await supabase.from('leads').update({ status: 'won' }).eq('id', sel.id)
-    if (data?.user?.id) setTimeout(() => supabase.rpc('set_user_service', { target: data.user.id, svc: 'Janitorial' }), 1500)
-    setCrewMsg(`✅ Crew account created — login: ${sel.email} / ${pw}  (service line set to Janitorial)`)
+    const svcLine = sel.lead_type === 'landscaper' ? 'Landscaping' : 'Janitorial'
+    if (data?.user?.id) setTimeout(() => supabase.rpc('set_user_service', { target: data.user.id, svc: svcLine }), 1500)
+    setCrewMsg(`✅ Crew account created — login: ${sel.email} / ${pw}  (service line set to ${svcLine})`)
     setConverting(false); load()
   }
   const propLink = (p) => `${window.location.origin}/p/${p.share_token}`
@@ -676,7 +678,7 @@ function Leads() {
             <label className="field-lbl">Call Notes</label>
             <textarea className="inp" rows={2} style={{ resize: 'vertical' }} placeholder="Log what happened on the call…" value={cf.notes || ''} onChange={e => setCf({ ...cf, notes: e.target.value })} />
           </div>
-          {sel.lead_type === 'cleaner' ? (
+          {['cleaner', 'landscaper'].includes(sel.lead_type) ? (
             <>
               <div className="fg2" style={{ marginBottom: 12 }}>
                 {[['contact_person', 'Contact / Owner'], ['phone', 'Phone'], ['email', 'Email (needed for login)']].map(([k, lb]) =>
@@ -767,7 +769,7 @@ function Leads() {
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{leadType === 'cleaner' && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
               <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
             </tr>)}
           </tbody></table></div>}
@@ -901,6 +903,7 @@ export default function ManagerApp() {
   const { profile } = useAuth()
   const isViewer = profile?.role === 'viewer'
   const [tab, setTab] = useState('dash')
+  const [menuOpen, setMenuOpen] = useState(true)
   // badge: open team tasks assigned to me (in-app "you've been assigned" notification)
   const [taskBadge, setTaskBadge] = useState(0)
   useEffect(() => {
@@ -914,7 +917,6 @@ export default function ManagerApp() {
     const iv = setInterval(loadBadge, 60000)
     return () => { live = false; clearInterval(iv) }
   }, [profile?.id, tab])
-  const Badge = ({ n }) => n > 0 ? <span style={{ marginLeft: 'auto', background: 'var(--g)', color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 10, padding: '1px 7px', lineHeight: 1.6 }}>{n}</span> : null
   const allMenu = [
     { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
     { id: 'clock', label: 'Time Clock', icon: <Clock size={16} /> },
@@ -948,10 +950,13 @@ export default function ManagerApp() {
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <Topbar />
       <div className="app-body" style={{ display: 'flex', flex: 1 }}>
-        <aside className="side">
-          <div className="side-lbl">Menu</div>
-          {menuItems.map(i => <button key={i.id} className={`side-btn ${tab === i.id ? 'on' : ''}`} onClick={() => setTab(i.id)}>{i.icon}{i.label}{i.id === 'ttasks' && <Badge n={taskBadge} />}</button>)}
-          <div style={{ marginTop: 'auto', paddingTop: 12 }}><ClockWidget onPunch={() => {}} compact /></div>
+        <aside className="side" style={{ width: menuOpen ? 200 : 60, padding: menuOpen ? '14px 8px' : '14px 6px', transition: 'width .15s ease' }}>
+          <button className="side-btn" onClick={() => setMenuOpen(o => !o)} title={menuOpen ? 'Hide menu' : 'Show menu'} style={{ justifyContent: menuOpen ? 'space-between' : 'center', color: 'var(--t3)', marginBottom: 4 }}>
+            {menuOpen && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>Menu</span>}
+            {menuOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
+          {menuItems.map(i => <button key={i.id} className={`side-btn ${tab === i.id ? 'on' : ''}`} onClick={() => setTab(i.id)} title={i.label} style={{ justifyContent: menuOpen ? 'flex-start' : 'center', position: 'relative' }}>{i.icon}{menuOpen && i.label}{i.id === 'ttasks' && (menuOpen ? <Badge n={taskBadge} /> : taskBadge > 0 && <span style={{ position: 'absolute', top: 2, right: 4, width: 8, height: 8, borderRadius: 4, background: 'var(--g)' }} />)}</button>)}
+          {menuOpen && <div style={{ marginTop: 'auto', paddingTop: 12 }}><ClockWidget onPunch={() => {}} compact /></div>}
         </aside>
         <main style={{ flex: 1, overflow: 'auto' }}>
           {tab === 'dash' && <Dashboard go={setTab} />}
