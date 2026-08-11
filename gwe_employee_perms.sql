@@ -30,6 +30,9 @@ create policy "leads_delete" on leads for delete using (is_mgr());
 -- ---- CALL LOGS ----
 drop policy if exists "calls_read" on call_logs;
 drop policy if exists "calls_manage" on call_logs;
+drop policy if exists "calls_insert" on call_logs;
+drop policy if exists "calls_update" on call_logs;
+drop policy if exists "calls_delete" on call_logs;
 create policy "calls_read"   on call_logs for select using (is_staff());
 create policy "calls_insert" on call_logs for insert with check (is_staff());
 create policy "calls_update" on call_logs for update using (is_staff()) with check (is_staff());
@@ -38,6 +41,9 @@ create policy "calls_delete" on call_logs for delete using (is_mgr());
 -- ---- TEAM TASKS ----
 drop policy if exists "ttasks_read" on team_tasks;
 drop policy if exists "ttasks_manage" on team_tasks;
+drop policy if exists "ttasks_insert" on team_tasks;
+drop policy if exists "ttasks_update" on team_tasks;
+drop policy if exists "ttasks_delete" on team_tasks;
 create policy "ttasks_read"   on team_tasks for select using (is_staff());
 create policy "ttasks_insert" on team_tasks for insert with check (is_staff());
 create policy "ttasks_update" on team_tasks for update using (is_staff()) with check (is_staff());
@@ -46,6 +52,9 @@ create policy "ttasks_delete" on team_tasks for delete using (is_mgr());
 -- ---- BIDS: staff read only, managers manage ----
 drop policy if exists "bids_read" on bids;
 drop policy if exists "bids_manage" on bids;
+drop policy if exists "bids_insert" on bids;
+drop policy if exists "bids_update" on bids;
+drop policy if exists "bids_delete" on bids;
 create policy "bids_read"   on bids for select using (is_staff());
 create policy "bids_insert" on bids for insert with check (is_mgr());
 create policy "bids_update" on bids for update using (is_mgr()) with check (is_mgr());

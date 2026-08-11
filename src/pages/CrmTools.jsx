@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../stores/auth'
-import { format, formatDistanceToNow } from 'date-fns'
-import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2, Trash2, Bell } from 'lucide-react'
+import { format, formatDistanceToNow, startOfWeek } from 'date-fns'
+import { Phone, Plus, X, RefreshCw, ListChecks, CheckCircle2, Trash2, Bell, Download, BarChart3 } from 'lucide-react'
 
 const cap = s => s ? s[0].toUpperCase() + s.slice(1).replace(/_/g, ' ') : s
+// generic client-side CSV download
+function downloadCSV(filename, cols, rows) {
+  const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const csv = [cols.map(c => esc(c.label)).join(',')].concat((rows || []).map(r => cols.map(c => esc(c.get ? c.get(r) : r[c.key])).join(','))).join('\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
+}
 const OUTCOMES = ['connected', 'interested', 'callback', 'voicemail', 'no_answer', 'left_message', 'disconnected', 'not_interested']
 // outcomes that should auto-schedule a follow-up call
 const AUTO_CB = ['voicemail', 'no_answer', 'callback']
@@ -247,9 +254,28 @@ function CallDetail({ call, onClose, onSaved, canManage }) {
 export function CallLogs() {
   const { profile } = useAuth()
   const canManage = profile?.role === 'manager'
-  const [calls, setCalls] = useState([]), [busy, setBusy] = useState(true), [filter, setFilter] = useState('all'), [q, setQ] = useState(''), [modal, setModal] = useState(false), [sel, setSel] = useState(null)
-  const load = async () => { const { data } = await supabase.from('call_logs').select('*').order('created_at', { ascending: false }).limit(500); setCalls(data || []); setBusy(false) }
+  const [calls, setCalls] = useState([]), [people, setPeople] = useState([]), [busy, setBusy] = useState(true), [filter, setFilter] = useState('all'), [q, setQ] = useState(''), [modal, setModal] = useState(false), [sel, setSel] = useState(null), [showStats, setShowStats] = useState(false)
+  const load = async () => {
+    const [{ data: c }, { data: p }] = await Promise.all([
+      supabase.from('call_logs').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('profiles').select('id, full_name'),
+    ])
+    setCalls(c || []); setPeople(p || []); setBusy(false)
+  }
   useEffect(() => { load() }, [])
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()
+  const nameOf = id => people.find(p => p.id === id)?.full_name || 'Unassigned'
+  const wkCalls = calls.filter(c => c.created_at >= weekStart)
+  const repStats = [...new Set(wkCalls.map(c => c.agent || 'null'))].map(a => {
+    const cs = wkCalls.filter(c => (c.agent || 'null') === a)
+    return {
+      agent: a, name: a === 'null' ? 'Unassigned' : nameOf(a), total: cs.length,
+      connects: cs.filter(c => ['connected', 'interested'].includes(c.outcome)).length,
+      callbacks: cs.filter(c => c.callback_date || c.outcome === 'callback').length,
+      vm: cs.filter(c => c.outcome === 'voicemail').length,
+      disc: cs.filter(c => c.outcome === 'disconnected').length,
+    }
+  }).sort((a, b) => b.total - a.total)
   const upd = async (id, patch) => { await supabase.from('call_logs').update(patch).eq('id', id); load() }
   const today = format(new Date(), 'yyyy-MM-dd')
   const isDue = c => c.callback_date && c.callback_date <= today && !['not_interested', 'disconnected'].includes(c.outcome)
@@ -264,8 +290,35 @@ export function CallLogs() {
       {sel && <CallDetail call={sel} canManage={canManage} onClose={() => setSel(null)} onSaved={load} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 800 }}>Call Logs</h1><p style={{ color: 'var(--t2)', fontSize: 13, marginTop: 2 }}>{calls.length} total · {shown.length} shown</p></div>
-        <div style={{ display: 'flex', gap: 8 }}><button className="btn btn-p" onClick={() => setModal(true)}><Plus size={13} /> New Call</button><button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /></button></div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-g" onClick={() => setShowStats(s => !s)}><BarChart3 size={13} /> Rep Stats</button>
+          <button className="btn btn-g" title="Export shown calls to CSV" onClick={() => downloadCSV(`gwe_calls_${format(new Date(), 'yyyy-MM-dd')}.csv`, [
+            { label: 'When', get: c => c.created_at ? format(new Date(c.created_at), 'yyyy-MM-dd HH:mm') : '' }, { label: 'Business', key: 'business' }, { label: 'Contact', key: 'contact_name' },
+            { label: 'Phone', key: 'phone' }, { label: 'Email', key: 'email' }, { label: 'Purpose', key: 'purpose' }, { label: 'Outcome', key: 'outcome' },
+            { label: 'Callback', key: 'callback_date' }, { label: 'Agent', get: c => nameOf(c.agent) }, { label: 'Notes', key: 'notes' },
+          ], shown)}><Download size={13} /> Export</button>
+          <button className="btn btn-p" onClick={() => setModal(true)}><Plus size={13} /> New Call</button>
+          <button className="btn btn-g btn-sm" onClick={load}><RefreshCw size={13} /></button>
+        </div>
       </div>
+      {showStats && <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>📊 Rep Stats — this week</div>
+        <p style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 10 }}>{wkCalls.length} calls since {format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d')}</p>
+        {repStats.length === 0 ? <div style={{ color: 'var(--t3)', fontSize: 13 }}>No calls logged this week yet.</div> :
+          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ textAlign: 'left', color: 'var(--t3)', fontSize: 11, textTransform: 'uppercase' }}>
+              <th style={{ padding: '6px 8px' }}>Rep</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Calls</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Connects</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Callbacks</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>VM</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Disc.</th>
+            </tr></thead>
+            <tbody>{repStats.map(r => <tr key={r.agent} style={{ borderTop: '1px solid var(--bd)' }}>
+              <td style={{ padding: '8px', fontWeight: 600 }}>{r.name}</td>
+              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }} className="mono">{r.total}</td>
+              <td style={{ padding: '8px', textAlign: 'right', color: 'var(--g-light)' }} className="mono">{r.connects}</td>
+              <td style={{ padding: '8px', textAlign: 'right', color: 'var(--yellow)' }} className="mono">{r.callbacks}</td>
+              <td style={{ padding: '8px', textAlign: 'right', color: 'var(--t3)' }} className="mono">{r.vm}</td>
+              <td style={{ padding: '8px', textAlign: 'right', color: 'var(--red)' }} className="mono">{r.disc}</td>
+            </tr>)}</tbody>
+          </table></div>}
+      </div>}
       {due.length > 0 && <div className="alrt" style={{ display: 'block', background: 'rgba(212,160,23,.08)', border: '1px solid rgba(212,160,23,.25)', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--yellow)', marginBottom: 8 }}><Bell size={14} /> {due.length} callback{due.length > 1 ? 's' : ''} due — call these clients back</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

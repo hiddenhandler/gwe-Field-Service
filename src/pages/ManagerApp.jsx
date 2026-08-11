@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, Phone, Trash2, FileText, PhoneCall, ListChecks } from 'lucide-react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
+import { LayoutDashboard, MapPin, Users, Calendar, History, RefreshCw, Plus, Search, Flag, X, CheckCircle2, AlertCircle, Clock, Camera, Pen, ChevronLeft, ChevronRight, ChevronDown, Phone, Trash2, FileText, PhoneCall, ListChecks, Download } from 'lucide-react'
 import { format, subDays, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, getDay } from 'date-fns'
 import { supabase, createUserAccount } from '../lib/supabase'
 import { downloadProposalPptx } from '../lib/proposalPptx'
@@ -9,10 +9,35 @@ import { useAuth } from '../stores/auth'
 import Topbar from '../components/Topbar'
 
 const dur = (a, b) => { if (!a || !b) return '—'; const m = Math.round((new Date(b) - new Date(a)) / 60000); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m` }
+// generic CSV download (client-side, no data leaves the browser)
+function downloadCSV(filename, cols, rows) {
+  const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const csv = [cols.map(c => esc(c.label)).join(',')]
+    .concat((rows || []).map(r => cols.map(c => esc(c.get ? c.get(r) : r[c.key])).join(',')))
+    .join('\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
+}
+const norm = s => (s || '').replace(/\D/g, '')
 const mapUrl = (lat, lng) => (lat != null && lng != null) ? `https://www.google.com/maps?q=${lat},${lng}` : null
 const photoLinks = (arr, label) => (arr || []).map((u, i) => (
   <a key={label + i} href={u} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /> {label}{arr.length > 1 ? ` ${i + 1}` : ''}</a>
 ))
+const proofCount = v => (v.before_photos?.length || 0) + (v.after_photos?.length || 0) + ((!v.before_photos?.length && !v.after_photos?.length && v.photo_url) ? 1 : 0)
+/* full-width proof panel shown under a visit row when expanded */
+function ProofPanel({ v }) {
+  const bn = v.before_photos?.length || 0, an = v.after_photos?.length || 0
+  const gps = mapUrl(v.check_in_lat, v.check_in_lng)
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '12px 14px', background: 'var(--bg3)', borderRadius: 'var(--r)' }}>
+      {gps && <div><div className="sec-t" style={{ marginBottom: 4 }}>GPS</div><a href={gps} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><MapPin size={11} /> Check-in location</a></div>}
+      {bn > 0 && <div><div className="sec-t" style={{ marginBottom: 4 }}>Before ({bn})</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{photoLinks(v.before_photos, 'B')}</div></div>}
+      {an > 0 && <div><div className="sec-t" style={{ marginBottom: 4 }}>After ({an})</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{photoLinks(v.after_photos, 'A')}</div></div>}
+      {!bn && !an && v.photo_url && <div><div className="sec-t" style={{ marginBottom: 4 }}>Photo</div><a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Camera size={11} /> Open</a></div>}
+      {v.signature_url && <div><div className="sec-t" style={{ marginBottom: 4 }}>Signature</div><a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={11} /> Open</a></div>}
+    </div>
+  )
+}
 function Bdg({ s }) {
   if (s === 'checked_in') return <span className="bdg bdg-g pulse">Active</span>
   if (s === 'checked_out') return <span className="bdg bdg-x">Done</span>
@@ -29,13 +54,15 @@ function Dashboard({ go }) {
   const [todayJobs, setTodayJobs] = useState([])
   const [bids, setBids] = useState([])
   const [leads, setLeads] = useState([])
+  const [expiring, setExpiring] = useState([])
   const [busy, setBusy] = useState(true)
 
   const load = useCallback(async () => {
     setBusy(true)
     const td = startOfDay(new Date()).toISOString(), wk = subDays(new Date(), 7).toISOString()
     const todayStr = format(new Date(), 'yyyy-MM-dd')
-    const [a, t, w, si, fl, r, sc, bd, ld] = await Promise.all([
+    const in30 = format(new Date(Date.now() + 30 * 864e5), 'yyyy-MM-dd')
+    const [a, t, w, si, fl, r, sc, bd, ld, cp] = await Promise.all([
       supabase.from('visits').select('*', { count: 'exact', head: true }).eq('status', 'checked_in'),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', td),
       supabase.from('visits').select('*', { count: 'exact', head: true }).gte('check_in_at', wk),
@@ -45,9 +72,20 @@ function Dashboard({ go }) {
       supabase.from('schedule').select('*').eq('service_date', todayStr).order('location_name'),
       supabase.from('bids').select('*').eq('status', 'prospect').gte('due_date', todayStr).order('due_date').limit(6),
       supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(6),
+      supabase.from('leads').select('id,name,company,lead_type,gl_expiry,wc_expiry,gl_received,wc_received,has_employees').in('lead_type', ['cleaner', 'landscaper']),
     ])
     setS({ active: a.count || 0, today: t.count || 0, week: w.count || 0, sites: si.count || 0, flagged: fl.count || 0 })
     setRecent(r.data || []); setTodayJobs(sc.data || []); setBids(bd.data || []); setLeads(ld.data || [])
+    // compliance: subs whose GL/WC is expired or expiring within 30 days
+    const exp = []
+    ;(cp.data || []).forEach(l => {
+      const issues = []
+      if (l.gl_received && l.gl_expiry) { if (l.gl_expiry < todayStr) issues.push('GL EXPIRED'); else if (l.gl_expiry <= in30) issues.push(`GL exp ${l.gl_expiry}`) }
+      if (l.has_employees && l.wc_received && l.wc_expiry) { if (l.wc_expiry < todayStr) issues.push('WC EXPIRED'); else if (l.wc_expiry <= in30) issues.push(`WC exp ${l.wc_expiry}`) }
+      if (issues.length) exp.push({ ...l, issues })
+    })
+    exp.sort((x, y) => (x.gl_expiry || x.wc_expiry || '').localeCompare(y.gl_expiry || y.wc_expiry || ''))
+    setExpiring(exp)
     setBusy(false)
   }, [])
   useEffect(() => { load() }, [load])
@@ -69,6 +107,19 @@ function Dashboard({ go }) {
         ))}
       </div>
       {s.flagged > 0 && <div className="alrt alrt-err" style={{ marginBottom: 16, cursor: 'pointer' }} onClick={() => go('visits')}><Flag size={15} />{s.flagged} flagged visit{s.flagged > 1 ? 's' : ''} need review →</div>}
+
+      {isMgr && expiring.length > 0 && <div className="alrt" style={{ display: 'block', background: 'rgba(212,160,23,.08)', border: '1px solid rgba(212,160,23,.25)', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--yellow)', marginBottom: 8 }}><AlertCircle size={14} /> {expiring.length} sub{expiring.length > 1 ? 's' : ''} with insurance expired or expiring in 30 days — collect updated COI</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {expiring.slice(0, 6).map(l => (
+            <div key={l.id} onClick={() => go('leads')} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 10, background: 'var(--bg3)', borderRadius: 6, padding: '7px 10px', fontSize: 13 }}>
+              <span style={{ fontWeight: 600 }}>{l.name}<span style={{ color: 'var(--t3)', fontWeight: 400 }}> · {l.lead_type === 'landscaper' ? 'Landscaping' : 'Janitorial'}</span></span>
+              <span style={{ color: l.issues.some(i => i.includes('EXPIRED')) ? 'var(--red)' : 'var(--yellow)', fontSize: 12, whiteSpace: 'nowrap' }}>{l.issues.join(' · ')}</span>
+            </div>
+          ))}
+          {expiring.length > 6 && <button className="btn btn-g btn-sm" style={{ alignSelf: 'flex-start', marginTop: 2 }} onClick={() => go('leads')}>View all {expiring.length} in Leads →</button>}
+        </div>
+      </div>}
 
       {/* Row 1 — Today's Route  |  Bid Deadlines */}
       <div className={isMgr ? 'fg2' : ''} style={{ marginBottom: 18 }}>
@@ -306,7 +357,7 @@ function CalendarView() {
 function AllVisits() {
   const [visits, setVisits] = useState([])
   const [busy, setBusy] = useState(true)
-  const [q, setQ] = useState(''), [status, setSt] = useState('all'), [days, setDays] = useState('7'), [flagErr, setFlagErr] = useState('')
+  const [q, setQ] = useState(''), [status, setSt] = useState('all'), [days, setDays] = useState('7'), [flagErr, setFlagErr] = useState(''), [openProof, setOpenProof] = useState(null)
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -346,25 +397,22 @@ function AllVisits() {
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : filtered.length === 0 ? <div className="empty"><History size={24} /><p>No visits match</p></div> : (
           <div className="tw"><table><thead><tr><th>Crew</th><th>Location</th><th>In</th><th>Out</th><th>Duration</th><th>Status</th><th>Proof</th><th></th></tr></thead><tbody>
-            {filtered.map(v => <tr key={v.id}>
+            {filtered.map(v => { const n = proofCount(v); const hasProof = n > 0 || mapUrl(v.check_in_lat, v.check_in_lng) || v.signature_url; const isOpen = openProof === v.id; return <Fragment key={v.id}>
+              <tr>
               <td><div style={{ fontWeight: 600 }}>{v.profiles?.full_name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{v.profiles?.phone}</div></td>
               <td><div>{v.locations?.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{v.locations?.city}</div>{v.notes && <div style={{ fontSize: 11, color: 'var(--yellow)', marginTop: 2 }} title={v.notes}>📝 {v.notes.length > 44 ? v.notes.slice(0, 44) + '…' : v.notes}</div>}</td>
               <td className="mono" style={{ fontSize: 11 }}>{v.check_in_at ? format(new Date(v.check_in_at), 'MMM d h:mm a') : '—'}</td>
               <td className="mono" style={{ fontSize: 11 }}>{v.check_out_at ? format(new Date(v.check_out_at), 'h:mm a') : v.status === 'checked_in' ? <span className="bdg bdg-g" style={{ fontSize: 10 }}>Live</span> : '—'}</td>
               <td className="mono" style={{ fontSize: 11 }}>{dur(v.check_in_at, v.check_out_at)}</td>
               <td><Bdg s={v.status} /></td>
-              <td style={{ whiteSpace: 'nowrap' }}>
-                {mapUrl(v.check_in_lat, v.check_in_lng) && <a href={mapUrl(v.check_in_lat, v.check_in_lng)} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }} title="Check-in GPS location"><MapPin size={10} /></a>}
-                {photoLinks(v.before_photos, 'B')}
-                {photoLinks(v.after_photos, 'A')}
-                {!v.before_photos?.length && !v.after_photos?.length && v.photo_url && <a href={v.photo_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm" style={{ marginRight: 4 }}><Camera size={10} /></a>}
-                {v.signature_url && <a href={v.signature_url} target="_blank" rel="noreferrer" className="btn btn-g btn-sm"><Pen size={10} /></a>}
-              </td>
+              <td>{hasProof ? <button className="btn btn-g btn-sm" onClick={() => setOpenProof(isOpen ? null : v.id)}><Camera size={11} /> Proof{n ? ` (${n})` : ''} <ChevronDown size={11} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .12s' }} /></button> : <span style={{ color: 'var(--t3)', fontSize: 12 }}>—</span>}</td>
               <td style={{ whiteSpace: 'nowrap' }}>
                 {v.status === 'flagged' ? <button className="btn btn-g btn-sm" onClick={() => flag(v, v.check_out_at ? 'checked_out' : 'checked_in')}>Unflag</button> : <button className="btn btn-d btn-sm" onClick={() => flag(v, 'flagged')}><Flag size={10} /></button>}
                 <button className="btn btn-d btn-sm" style={{ marginLeft: 4 }} onClick={() => del(v)} title="Delete this check-in"><Trash2 size={10} /></button>
               </td>
-            </tr>)}
+              </tr>
+              {isOpen && <tr><td colSpan={8} style={{ padding: '0 8px 10px' }}><ProofPanel v={v} /></td></tr>}
+            </Fragment> })}
           </tbody></table></div>
         )}
       </div>
@@ -600,6 +648,7 @@ function Leads() {
 
   const typed = leads.filter(l => (l.lead_type || 'customer') === leadType)
   const shown = filter === 'all' ? typed : typed.filter(l => l.status === filter)
+  const dupLead = (add && f.phone && norm(f.phone).length >= 7) ? leads.find(l => norm(l.phone) === norm(f.phone)) : null
   const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: typed.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const dueSoon = (l) => l.status === 'contacted' && l.callback_date && l.callback_date <= todayStr
@@ -610,8 +659,14 @@ function Leads() {
       {callLead && <LogCall lead={callLead} onClose={() => setCallLead(null)} onSaved={() => { load(); if (sel) openLead(sel) }} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Leads</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-g" onClick={() => setScripts(!scripts)}><Phone size={13} /> {scripts ? 'Hide Scripts' : 'Call Scripts'}</button>
+          <button className="btn btn-g" title="Export shown leads to CSV" onClick={() => downloadCSV(`gwe_leads_${leadType}_${todayStr}.csv`, [
+            { label: 'Name', key: 'name' }, { label: 'Company', key: 'company' }, { label: 'Type', get: l => l.lead_type || 'customer' },
+            { label: 'Contact', key: 'contact_person' }, { label: 'Phone', key: 'phone' }, { label: 'Email', key: 'email' },
+            { label: 'Status', key: 'status' }, { label: 'Callback', key: 'callback_date' }, { label: 'Source', key: 'source' },
+            { label: 'GL exp', key: 'gl_expiry' }, { label: 'WC exp', key: 'wc_expiry' }, { label: 'Agreement', key: 'vendor_agreement' }, { label: 'Notes', key: 'notes' },
+          ], shown)}><Download size={13} /> Export</button>
           <button className="btn btn-p" onClick={() => setAdd(!add)}>{add ? <><X size={13} /> Cancel</> : <><Plus size={13} /> Add {leadType === 'cleaner' ? 'Janitorial' : leadType === 'landscaper' ? 'Landscaper' : 'Customer'}</>}</button>
         </div>
       </div>
@@ -662,6 +717,7 @@ function Leads() {
               <div key={k} className="field"><label className="field-lbl">{l}</label><input className="inp" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} required={r} /></div>)}
           </div>
           <div className="field" style={{ marginBottom: 14 }}><label className="field-lbl">Notes</label><input className="inp" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+          {dupLead && <div className="alrt alrt-err" style={{ marginBottom: 12, fontSize: 12 }}><AlertCircle size={13} /> This phone is already on a lead: <b>{dupLead.name}</b> ({dupLead.status}). You can still save.</div>}
           <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Lead'}</button>
         </form>
       </div>}
