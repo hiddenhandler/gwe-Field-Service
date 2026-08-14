@@ -84,12 +84,20 @@ export function LogCall({ lead, onClose, onSaved }) {
   const [lang, setLang] = useState('en')
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
+  const [searching, setSearching] = useState(false)
   useEffect(() => {
-    if (lead || leadMode !== 'existing') return
+    if (lead || leadMode !== 'existing') { setLeadHits([]); return }
+    const s = leadQ.trim()
+    if (!s) { setLeadHits([]); setSearching(false); return }
+    setSearching(true)
     const t = setTimeout(async () => {
-      const s = leadQ.trim(); if (!s) { setLeadHits([]); return }
-      const { data } = await supabase.from('leads').select('id,name,company,lead_type,phone,email,contact_person,notes,callback_date,has_employees,gl_received,wc_received').ilike('name', `%${s}%`).limit(8)
-      setLeadHits(data || [])
+      const term = s.replace(/[,()*]/g, ' ').trim()   // sanitize for PostgREST or()
+      const { data, error } = await supabase.from('leads')
+        .select('id,name,company,lead_type,phone,email,contact_person,notes,callback_date,has_employees,gl_received,wc_received')
+        .or(`name.ilike.*${term}*,company.ilike.*${term}*,contact_person.ilike.*${term}*,phone.ilike.*${term}*`)
+        .limit(10)
+      if (!error) setLeadHits(data || [])
+      setSearching(false)
     }, 250)
     return () => clearTimeout(t)
   }, [leadQ, leadMode, lead])
@@ -155,10 +163,12 @@ export function LogCall({ lead, onClose, onSaved }) {
             <button type="button" className="loc-selected" onClick={() => setPicked(null)}><div><div className="loc-name">{picked.name}</div><div className="loc-street">{picked.lead_type} · {picked.phone || ''}</div></div><span className="loc-change">Change</span></button>
           ) : (
             <>
-              <input className="inp" placeholder="Search a lead by name…" value={leadQ} onChange={e => setLeadQ(e.target.value)} />
+              <input className="inp" placeholder="Search by name, company, or phone…" value={leadQ} onChange={e => setLeadQ(e.target.value)} autoFocus />
               {leadHits.length > 0 && <div className="loc-list" style={{ marginTop: 6 }}>{leadHits.map(h => (
-                <button type="button" key={h.id} className="loc-item" onClick={() => { setPicked(h); setF(p => ({ ...p, business: h.name, contact_name: h.contact_person || p.contact_name, phone: h.phone || p.phone, email: h.email || p.email })) }}><div className="loc-name">{h.name}</div><div className="loc-street">{h.lead_type} · {h.phone || ''}</div></button>
+                <button type="button" key={h.id} className="loc-item" onClick={() => { setPicked(h); setLeadHits([]); setF(p => ({ ...p, business: h.name, contact_name: h.contact_person || p.contact_name, phone: h.phone || p.phone, email: h.email || p.email })) }}><div className="loc-name">{h.name}{h.company && h.company !== h.name ? ` · ${h.company}` : ''}</div><div className="loc-street">{h.lead_type === 'landscaper' ? 'Landscaping' : h.lead_type === 'cleaner' ? 'Janitorial' : 'Customer'}{h.phone ? ` · ${h.phone}` : ''}</div></button>
               ))}</div>}
+              {leadQ.trim() && !searching && leadHits.length === 0 && <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>No matches. Try a company name or phone, or use “Create new lead”.</div>}
+              {searching && <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>Searching…</div>}
             </>
           ))}
         </div>}
