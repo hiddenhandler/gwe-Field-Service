@@ -67,8 +67,8 @@ const SCRIPTS_QUICK = {
     { h: 'Close', b: "I'll add you to our sub list. Send me your COI and I'll text a one-page sub agreement. Cool?" },
   ],
   customer: [
-    { h: 'Opener', b: "Hi [Name], Fernando with Great Way Environmental. Quick one — most properties pay two vendors, one for cleaning and one for grounds. We do both under one contract: one crew, one invoice, one contact." },
-    { h: 'Value', b: "One number to call, no middleman between the cleaner and the landscaper." },
+    { h: 'Opener', b: "Hi [Name], Fernando with Great Way Environmental — landscaping and cleaning. We usually save business owners money. Mind if I do a quick walkthrough of your property and get you a quote?" },
+    { h: 'Value (if they ask)', b: "Most properties pay two vendors — one for cleaning, one for grounds. We do both under one contract: one crew, one invoice, one number to call." },
     { h: 'Social proof', b: "We already handle G&C, Lexus, and Hilton nearby — we're in your area every week." },
     { h: 'Qualify', b: "Who handles it now — in-house or contracted? … Happy with them? … When's your contract up?" },
     { h: 'Objections', b: "\"Under contract.\" → When's renewal? I'll send a quick comparison.\n\"Just send pricing.\" → Every property's different — a 10-min walkthrough gets you a real number.\n\"How much?\" → That's exactly what the walkthrough's for." },
@@ -85,8 +85,8 @@ const SCRIPTS_QUICK_ES = {
     { h: 'Cierre', b: "Lo agrego a la lista de subcontratistas. Mándeme su COI y le paso un acuerdo de una página por mensaje. ¿Le parece?" },
   ],
   customer: [
-    { h: 'Apertura', b: "Hola [Name], Fernando de Great Way Environmental. Rápido — casi todas las propiedades pagan dos proveedores, uno de limpieza y otro de jardinería. Nosotros hacemos ambos en un solo contrato: una cuadrilla, una factura, un contacto." },
-    { h: 'Valor', b: "Un solo número, sin intermediar entre el de limpieza y el de jardinería." },
+    { h: 'Apertura', b: "Hola [Name], Fernando de Great Way Environmental — jardinería y limpieza. Normalmente le ahorramos dinero a los dueños de negocios. ¿Le parece si hago una visita rápida a su propiedad y le doy una cotización?" },
+    { h: 'Valor (si preguntan)', b: "Casi todas las propiedades pagan dos proveedores — uno de limpieza y otro de jardinería. Nosotros hacemos ambos en un solo contrato: una cuadrilla, una factura, un solo número." },
     { h: 'Prueba social', b: "Ya atendemos G&C, Lexus y Hilton cerca — estamos por su zona cada semana." },
     { h: 'Calificar', b: "¿Quién lo maneja ahora — propio o contratado? … ¿Contento con ellos? … ¿Cuándo se vence su contrato?" },
     { h: 'Objeciones', b: "\"Bajo contrato.\" → ¿Cuándo se vence? Le mando una comparación rápida.\n\"Mándeme precio.\" → Cada propiedad es distinta — una visita de 10 min le da un número real.\n\"¿Cuánto?\" → Para eso es justamente la visita." },
