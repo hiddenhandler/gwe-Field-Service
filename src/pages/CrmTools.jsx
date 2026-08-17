@@ -114,7 +114,7 @@ export function LogCall({ lead, onClose, onSaved }) {
     setBusy(true)
     const cbDate = f.callback_date || (AUTO_CB.includes(f.outcome) ? nextBiz() : '')
     const stamp = `[${format(new Date(), 'MMM d')}] ${notePreview}`
-    const newStatus = f.outcome === 'not_interested' ? 'lost' : 'contacted'
+    const newStatus = ['not_interested', 'disconnected'].includes(f.outcome) ? 'lost' : 'contacted'
     let target = lead || picked || null
     let leadId = target?.id || null
     // create a lead from this call

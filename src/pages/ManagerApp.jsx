@@ -519,6 +519,105 @@ function Crew() {
 
 /* ═══ LEADS + CRM ═══ */
 const LEAD_STATUS = ['new', 'contacted', 'won', 'lost']
+/* Lead detail — module scope so its inputs keep focus; rendered inline under the clicked row */
+function LeadDetail({ sel, cf, setCf, saveCf, savingCf, convertToCrew, converting, crewMsg, canManage, todayStr, createProposal, creating, convertToCustomer, props_, propLink, copyLink, copied, emailLink, delProp, setCallLead, setSel }) {
+  return (
+    <div className="card" style={{ marginBottom: 4, borderColor: 'var(--g-edge)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-p btn-sm" onClick={() => setCallLead(sel)}><Phone size={12} /> Log Call</button>
+          <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
+        </div>
+      </div>
+      <div className="field" style={{ marginBottom: 12 }}>
+        <label className="field-lbl">Call Notes</label>
+        <textarea className="inp" rows={2} style={{ resize: 'vertical' }} placeholder="Log what happened on the call…" value={cf.notes || ''} onChange={e => setCf({ ...cf, notes: e.target.value })} />
+      </div>
+      {['cleaner', 'landscaper'].includes(sel.lead_type) ? (
+        <>
+          <div className="fg2" style={{ marginBottom: 12 }}>
+            {[['contact_person', 'Contact / Owner'], ['phone', 'Phone'], ['email', 'Email (needed for login)']].map(([k, lb]) =>
+              <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
+          </div>
+          <div style={{ borderTop: '1px solid var(--bd)', marginTop: 12, paddingTop: 12 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>Compliance Documents</div>
+            <div className="alrt alrt-ok" style={{ display: 'block', marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
+              ⓘ Collect from every sub: <b>General Liability</b> (required). <b>Workers' Comp</b> — required <b>only if they have employees</b>. Signed <b>Vendor Agreement</b> (we sub work to them; they agree not to solicit our accounts).
+            </div>
+            <div className="fg2" style={{ marginBottom: 12 }}>
+              <div className="field"><label className="field-lbl">Has employees?</label>
+                <button type="button" className={`btn btn-sm ${cf.has_employees ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, has_employees: !cf.has_employees })}>{cf.has_employees ? "Yes — Workers' Comp required" : 'No — GL only'}</button>
+              </div>
+              <div className="field"><label className="field-lbl">Vendor Agreement</label>
+                <select className="inp" value={cf.vendor_agreement || 'pending'} onChange={e => setCf({ ...cf, vendor_agreement: e.target.value })}><option value="pending">Pending</option><option value="sent">Sent</option><option value="signed">Signed</option></select>
+              </div>
+              <div className="field"><label className="field-lbl">General Liability (expiry)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button" className={`btn btn-sm ${cf.gl_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, gl_received: !cf.gl_received })}>{cf.gl_received ? '✓ On file' : 'Missing'}</button>
+                  <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.gl_expiry || ''} onChange={e => setCf({ ...cf, gl_expiry: e.target.value })} />
+                </div>
+              </div>
+              {cf.has_employees && <div className="field"><label className="field-lbl">Workers' Comp (expiry)</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button" className={`btn btn-sm ${cf.wc_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, wc_received: !cf.wc_received })}>{cf.wc_received ? '✓ On file' : 'Missing'}</button>
+                  <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.wc_expiry || ''} onChange={e => setCf({ ...cf, wc_expiry: e.target.value })} />
+                </div>
+              </div>}
+            </div>
+            {(() => {
+              const glOk = cf.gl_received && (!cf.gl_expiry || cf.gl_expiry >= todayStr)
+              const wcOk = !cf.has_employees || (cf.wc_received && (!cf.wc_expiry || cf.wc_expiry >= todayStr))
+              const agOk = cf.vendor_agreement === 'signed'
+              const miss = [
+                (!cf.gl_received ? 'General Liability' : (cf.gl_expiry && cf.gl_expiry < todayStr) ? 'General Liability (EXPIRED)' : null),
+                (cf.has_employees && (!cf.wc_received ? "Workers' Comp" : (cf.wc_expiry && cf.wc_expiry < todayStr) ? "Workers' Comp (EXPIRED)" : null)),
+                (!agOk ? 'Signed Vendor Agreement' : null),
+              ].filter(Boolean)
+              const ok = glOk && wcOk && agOk
+              return <div className={`alrt ${ok ? 'alrt-ok' : 'alrt-err'}`} style={{ fontSize: 13 }}>{ok ? <><CheckCircle2 size={14} /> Compliant — cleared to sub</> : <><AlertCircle size={14} /> Missing: {miss.join(' · ')}</>}</div>
+            })()}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
+            {canManage && <button className="btn btn-p btn-sm" onClick={convertToCrew} disabled={converting}>{converting ? 'Creating…' : '★ Convert to Crew'}</button>}
+          </div>
+          {crewMsg && <div className="alrt alrt-ok" style={{ marginTop: 12, wordBreak: 'break-word' }}><CheckCircle2 size={14} />{crewMsg}</div>}
+        </>
+      ) : (
+        <>
+          <div className="fg2" style={{ marginBottom: 12 }}>
+            {[['contact_person', 'Contact Person'], ['property_address', 'Property Address'], ['square_footage', 'Square Footage'], ['building_type', 'Building Type'], ['service_frequency', 'Service Frequency (e.g. 3x/week)']].map(([k, lb]) =>
+              <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
+            <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={cf.service_type} onChange={e => setCf({ ...cf, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Residential Turnover</option></select></div>
+            <div className="field"><label className="field-lbl">Monthly Price ($)</label><input className="inp" type="number" value={cf.monthly_price} onChange={e => setCf({ ...cf, monthly_price: e.target.value })} /></div>
+            <div className="field"><label className="field-lbl">Customer</label><button type="button" className={`btn btn-sm ${cf.is_job ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, is_job: !cf.is_job })}>{cf.is_job ? '✓ Active Customer/Site' : 'Mark as Customer/Site'}</button></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
+            {canManage && <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>}
+            {canManage && <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>}
+          </div>
+          {canManage && props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
+            <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
+            {props_.map(p => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
+                <div><b>{p.monthly_price ? `$${p.monthly_price}/mo` : 'No price'}</b> · <span className={`bdg ${p.status === 'accepted' ? 'bdg-g' : 'bdg-x'}`}>{p.status}</span>{p.accepted_name ? ` · signed by ${p.accepted_name}` : ''}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <a className="btn btn-g btn-sm" href={propLink(p)} target="_blank" rel="noreferrer">Open</a>
+                  <button className="btn btn-g btn-sm" onClick={() => copyLink(p)}>{copied === p.id ? 'Copied!' : 'Copy link'}</button>
+                  <a className="btn btn-g btn-sm" href={emailLink(p)}>Email</a>
+                  <button className="btn btn-g btn-sm" onClick={() => downloadProposalPptx(p)}>PPTX</button>
+                  <button className="btn btn-d btn-sm" onClick={() => delProp(p)}><Trash2 size={11} /></button>
+                </div>
+              </div>
+            ))}
+          </div>}
+        </>
+      )}
+    </div>
+  )
+}
 const CALL_SCRIPTS = [
   {
     type: 'cleaner',
@@ -647,7 +746,8 @@ function Leads() {
   const delProp = async (p) => { await supabase.from('proposals').delete().eq('id', p.id); setProps(ps => ps.filter(x => x.id !== p.id)) }
 
   const typed = leads.filter(l => (l.lead_type || 'customer') === leadType)
-  const shown = filter === 'all' ? typed : typed.filter(l => l.status === filter)
+  const dead = l => l.status === 'lost'   // not interested / disconnected — sink to bottom
+  const shown = (filter === 'all' ? typed : typed.filter(l => l.status === filter)).slice().sort((a, b) => (dead(a) ? 1 : 0) - (dead(b) ? 1 : 0))
   const dupLead = (add && f.phone && norm(f.phone).length >= 7) ? leads.find(l => norm(l.phone) === norm(f.phone)) : null
   const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: typed.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -721,113 +821,20 @@ function Leads() {
           <button className="btn btn-p" type="submit" disabled={saving}>{saving ? <span className="spin" style={{ borderTopColor: '#fff' }} /> : 'Save Lead'}</button>
         </form>
       </div>}
-      {sel && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{sel.name}{sel.company ? ` · ${sel.company}` : ''}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-p btn-sm" onClick={() => setCallLead(sel)}><Phone size={12} /> Log Call</button>
-              <button className="btn btn-g btn-sm" onClick={() => setSel(null)}><X size={12} /> Close</button>
-            </div>
-          </div>
-          <div className="field" style={{ marginBottom: 12 }}>
-            <label className="field-lbl">Call Notes</label>
-            <textarea className="inp" rows={2} style={{ resize: 'vertical' }} placeholder="Log what happened on the call…" value={cf.notes || ''} onChange={e => setCf({ ...cf, notes: e.target.value })} />
-          </div>
-          {['cleaner', 'landscaper'].includes(sel.lead_type) ? (
-            <>
-              <div className="fg2" style={{ marginBottom: 12 }}>
-                {[['contact_person', 'Contact / Owner'], ['phone', 'Phone'], ['email', 'Email (needed for login)']].map(([k, lb]) =>
-                  <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
-              </div>
-              <div style={{ borderTop: '1px solid var(--bd)', marginTop: 12, paddingTop: 12 }}>
-                <div className="sec-t" style={{ marginBottom: 8 }}>Compliance Documents</div>
-                <div className="alrt alrt-ok" style={{ display: 'block', marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}>
-                  ⓘ Collect from every sub: <b>General Liability</b> (required). <b>Workers' Comp</b> — required <b>only if they have employees</b>. Signed <b>Vendor Agreement</b> (we sub work to them; they agree not to solicit our accounts).
-                </div>
-                <div className="fg2" style={{ marginBottom: 12 }}>
-                  <div className="field"><label className="field-lbl">Has employees?</label>
-                    <button type="button" className={`btn btn-sm ${cf.has_employees ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, has_employees: !cf.has_employees })}>{cf.has_employees ? "Yes — Workers' Comp required" : 'No — GL only'}</button>
-                  </div>
-                  <div className="field"><label className="field-lbl">Vendor Agreement</label>
-                    <select className="inp" value={cf.vendor_agreement || 'pending'} onChange={e => setCf({ ...cf, vendor_agreement: e.target.value })}><option value="pending">Pending</option><option value="sent">Sent</option><option value="signed">Signed</option></select>
-                  </div>
-                  <div className="field"><label className="field-lbl">General Liability (expiry)</label>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button type="button" className={`btn btn-sm ${cf.gl_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, gl_received: !cf.gl_received })}>{cf.gl_received ? '✓ On file' : 'Missing'}</button>
-                      <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.gl_expiry || ''} onChange={e => setCf({ ...cf, gl_expiry: e.target.value })} />
-                    </div>
-                  </div>
-                  {cf.has_employees && <div className="field"><label className="field-lbl">Workers' Comp (expiry)</label>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button type="button" className={`btn btn-sm ${cf.wc_received ? 'btn-p' : 'btn-g'}`} onClick={() => setCf({ ...cf, wc_received: !cf.wc_received })}>{cf.wc_received ? '✓ On file' : 'Missing'}</button>
-                      <input type="date" className="inp" style={{ padding: '4px 6px', fontSize: 12 }} value={cf.wc_expiry || ''} onChange={e => setCf({ ...cf, wc_expiry: e.target.value })} />
-                    </div>
-                  </div>}
-                </div>
-                {(() => {
-                  const glOk = cf.gl_received && (!cf.gl_expiry || cf.gl_expiry >= todayStr)
-                  const wcOk = !cf.has_employees || (cf.wc_received && (!cf.wc_expiry || cf.wc_expiry >= todayStr))
-                  const agOk = cf.vendor_agreement === 'signed'
-                  const miss = [
-                    (!cf.gl_received ? 'General Liability' : (cf.gl_expiry && cf.gl_expiry < todayStr) ? 'General Liability (EXPIRED)' : null),
-                    (cf.has_employees && (!cf.wc_received ? "Workers' Comp" : (cf.wc_expiry && cf.wc_expiry < todayStr) ? "Workers' Comp (EXPIRED)" : null)),
-                    (!agOk ? 'Signed Vendor Agreement' : null),
-                  ].filter(Boolean)
-                  const ok = glOk && wcOk && agOk
-                  return <div className={`alrt ${ok ? 'alrt-ok' : 'alrt-err'}`} style={{ fontSize: 13 }}>{ok ? <><CheckCircle2 size={14} /> Compliant — cleared to sub</> : <><AlertCircle size={14} /> Missing: {miss.join(' · ')}</>}</div>
-                })()}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
-                {canManage && <button className="btn btn-p btn-sm" onClick={convertToCrew} disabled={converting}>{converting ? 'Creating…' : '★ Convert to Crew'}</button>}
-              </div>
-              {crewMsg && <div className="alrt alrt-ok" style={{ marginTop: 12, wordBreak: 'break-word' }}><CheckCircle2 size={14} />{crewMsg}</div>}
-            </>
-          ) : (
-            <>
-              <div className="fg2" style={{ marginBottom: 12 }}>
-                {[['contact_person', 'Contact Person'], ['property_address', 'Property Address'], ['square_footage', 'Square Footage'], ['building_type', 'Building Type'], ['service_frequency', 'Service Frequency (e.g. 3x/week)']].map(([k, lb]) =>
-                  <div key={k} className="field"><label className="field-lbl">{lb}</label><input className="inp" value={cf[k] || ''} onChange={e => setCf({ ...cf, [k]: e.target.value })} /></div>)}
-                <div className="field"><label className="field-lbl">Service Type</label><select className="inp" value={cf.service_type} onChange={e => setCf({ ...cf, service_type: e.target.value })}><option>Janitorial</option><option>Landscaping</option><option>Property Care</option><option>Residential Turnover</option></select></div>
-                <div className="field"><label className="field-lbl">Monthly Price ($)</label><input className="inp" type="number" value={cf.monthly_price} onChange={e => setCf({ ...cf, monthly_price: e.target.value })} /></div>
-                <div className="field"><label className="field-lbl">Customer</label><button type="button" className={`btn btn-sm ${cf.is_job ? 'btn-p' : 'btn-g'}`} style={{ width: '100%' }} onClick={() => setCf({ ...cf, is_job: !cf.is_job })}>{cf.is_job ? '✓ Active Customer/Site' : 'Mark as Customer/Site'}</button></div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn btn-g btn-sm" onClick={saveCf} disabled={savingCf}>{savingCf ? 'Saving…' : 'Save Info'}</button>
-                {canManage && <button className="btn btn-p btn-sm" onClick={createProposal} disabled={creating}><Plus size={11} /> {creating ? 'Creating…' : 'Create Proposal'}</button>}
-                {canManage && <button className="btn btn-g btn-sm" onClick={convertToCustomer} disabled={converting} style={{ marginLeft: 'auto' }}>{converting ? 'Converting…' : '★ Convert to Customer'}</button>}
-              </div>
-              {canManage && props_.length > 0 && <div style={{ borderTop: '1px solid var(--bd)', marginTop: 14, paddingTop: 12 }}>
-                <div className="sec-t" style={{ marginBottom: 8 }}>Proposals</div>
-                {props_.map(p => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--bd)', fontSize: 13, flexWrap: 'wrap' }}>
-                    <div><b>{p.monthly_price ? `$${p.monthly_price}/mo` : 'No price'}</b> · <span className={`bdg ${p.status === 'accepted' ? 'bdg-g' : 'bdg-x'}`}>{p.status}</span>{p.accepted_name ? ` · signed by ${p.accepted_name}` : ''}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <a className="btn btn-g btn-sm" href={propLink(p)} target="_blank" rel="noreferrer">Open</a>
-                      <button className="btn btn-g btn-sm" onClick={() => copyLink(p)}>{copied === p.id ? 'Copied!' : 'Copy link'}</button>
-                      <a className="btn btn-g btn-sm" href={emailLink(p)}>Email</a>
-                      <button className="btn btn-g btn-sm" onClick={() => downloadProposalPptx(p)}>PPTX</button>
-                      <button className="btn btn-d btn-sm" onClick={() => delProp(p)}><Trash2 size={11} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>}
-            </>
-          )}
-        </div>
-      )}
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No leads{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
           <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Notes</th><th></th></tr></thead><tbody>
-            {shown.map(l => <tr key={l.id} style={dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}}>
-              <td><button type="button" onClick={() => openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}><div style={{ fontWeight: 600, color: 'var(--g-light)' }}>{l.name}</div><div style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</div></button></td>
+            {shown.map(l => { const isOpen = sel?.id === l.id; return <Fragment key={l.id}>
+              <tr style={{ ...(dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}), ...(dead(l) ? { opacity: 0.5 } : {}), ...(isOpen ? { background: 'var(--bg-h)' } : {}) }}>
+              <td><button type="button" onClick={() => isOpen ? setSel(null) : openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}><ChevronDown size={13} style={{ color: 'var(--t3)', flexShrink: 0, transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .12s' }} /><span><span style={{ fontWeight: 600, color: 'var(--g-light)', display: 'block' }}>{l.name}</span><span style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</span></span></button></td>
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
               <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
               <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
-            </tr>)}
+              </tr>
+              {isOpen && <tr><td colSpan={6} style={{ padding: '0 8px 10px' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></td></tr>}
+            </Fragment> })}
           </tbody></table></div>}
       </div>
     </div>
