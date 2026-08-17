@@ -873,28 +873,44 @@ function Leads() {
       </div>}
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No leads{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
-          <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Owner</th><th>Notes</th><th></th></tr></thead><tbody>
-            {shown.map(l => { const isOpen = sel?.id === l.id; return <Fragment key={l.id}>
-              <tr style={{ ...(dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}), ...(dead(l) ? { opacity: 0.5 } : {}), ...(isOpen ? { background: 'var(--bg-h)' } : {}) }}>
-              <td><button type="button" onClick={() => isOpen ? setSel(null) : openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}><ChevronDown size={13} style={{ color: 'var(--t3)', flexShrink: 0, transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .12s' }} /><span><span style={{ fontWeight: 600, color: 'var(--g-light)', display: 'block' }}>{l.name}</span><span style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</span></span></button></td>
-              <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
-              <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
-              <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
-              <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{canManage
-                ? (l.reserved
-                    ? <button className="btn btn-sm" style={{ background: '#e9b949', color: '#2a1e00', fontWeight: 700 }} title="Release back to employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: false, assigned_to: null }) }}>Reserved ✕</button>
-                    : <><button className="btn btn-g btn-sm" title="Reserve — hide from employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: true, assigned_to: profile?.id }) }}>Reserve</button>{l.assigned_to && <span style={{ color: 'var(--t3)', marginLeft: 4 }}>{nameOf(l.assigned_to) || ''}</span>}</>)
-                : (l.assigned_to === profile?.id
-                    ? <button className="btn btn-g btn-sm" title="Release" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: null }) }}>★ You ✕</button>
-                    : l.assigned_to
-                      ? <span style={{ color: 'var(--t3)' }}>{nameOf(l.assigned_to) || 'Claimed'}</span>
-                      : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>)}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}<span style={{ display: 'inline-block', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }} title={l.notes}>{l.notes}</span></td>
-              <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
-              </tr>
-              {isOpen && <tr><td colSpan={7} style={{ padding: '0 8px 10px' }}><div style={{ position: 'sticky', left: 8, width: 'min(100%, 980px)' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></div></td></tr>}
-            </Fragment> })}
-          </tbody></table></div>}
+          <div>
+            {shown.map(l => { const isOpen = sel?.id === l.id; return (
+              <div key={l.id} style={{ borderBottom: '1px solid var(--bd)', ...(dead(l) ? { opacity: 0.55 } : {}), ...(isOpen ? { background: 'var(--bg-h)' } : dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}) }}>
+                <div style={{ display: 'flex', gap: 18, padding: '12px 16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  {/* left: business info + status/callback + owner */}
+                  <div style={{ flex: '1 1 340px', minWidth: 0 }}>
+                    <button type="button" onClick={() => isOpen ? setSel(null) : openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <ChevronDown size={14} style={{ color: 'var(--t3)', flexShrink: 0, marginTop: 3, transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .12s' }} />
+                      <span><span style={{ fontWeight: 700, color: 'var(--g-light)', display: 'block', fontSize: 14 }}>{l.name}</span><span style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</span></span>
+                    </button>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '6px 0 0 22px' }}>
+                      {l.phone && <a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)', fontSize: 13 }}>{l.phone}</a>}
+                      {l.email && <span style={{ color: 'var(--t3)', fontSize: 12 }}>{l.email}</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0 0 22px' }}>
+                      <select className="inp" style={{ padding: '4px 8px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select>
+                      <input type="date" className="inp" style={{ padding: '4px 8px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />
+                      {dueSoon(l) && <span style={{ fontSize: 10, color: 'var(--yellow)', fontWeight: 700 }}>DUE</span>}
+                      {canManage
+                        ? (l.reserved
+                            ? <button className="btn btn-sm" style={{ background: '#e9b949', color: '#2a1e00', fontWeight: 700 }} title="Release back to employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: false, assigned_to: null }) }}>Reserved ✕</button>
+                            : <button className="btn btn-g btn-sm" title="Reserve — hide from employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: true, assigned_to: profile?.id }) }}>Reserve</button>)
+                        : (l.assigned_to === profile?.id
+                            ? <button className="btn btn-g btn-sm" title="Release" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: null }) }}>★ You ✕</button>
+                            : l.assigned_to
+                              ? <span style={{ color: 'var(--t3)', fontSize: 12 }}>{nameOf(l.assigned_to) || 'Claimed'}</span>
+                              : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>)}
+                      {['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}
+                      {canManage && <button className="btn btn-d btn-sm" onClick={e => { e.stopPropagation(); del(l.id) }} title="Delete lead"><X size={11} /></button>}
+                    </div>
+                  </div>
+                  {/* right: notes */}
+                  <div style={{ flex: '2 1 280px', minWidth: 0, fontSize: 12, color: 'var(--t3)', lineHeight: 1.55 }}>{l.notes}</div>
+                </div>
+                {isOpen && <div style={{ padding: '0 16px 14px' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></div>}
+              </div>
+            ) })}
+          </div>}
       </div>
     </div>
   )
