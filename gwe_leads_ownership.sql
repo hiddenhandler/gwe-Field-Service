@@ -23,21 +23,21 @@ create index if not exists visits_checkin_idx     on visits(check_in_at desc);
 --    Keeps the earliest row (lowest id); reassigns duplicate call logs to it.
 --    Reassign first so no call history is orphaned:
 update call_logs c
-set lead_id = k.keep_id
+set lead_id = (k.keep_id)::uuid
 from (
   select id,
-         min(id) over (partition by lower(btrim(coalesce(name,''))), regexp_replace(coalesce(phone,''),'\D','','g')) as keep_id,
+         min(id::text) over (partition by lower(btrim(coalesce(name,''))), regexp_replace(coalesce(phone,''),'\D','','g')) as keep_id,
          regexp_replace(coalesce(phone,''),'\D','','g') as ph
   from leads
 ) k
-where c.lead_id = k.id and k.id <> k.keep_id and length(k.ph) >= 7;
+where c.lead_id = k.id and k.id::text <> k.keep_id and length(k.ph) >= 7;
 
 --    Then remove the duplicate lead rows:
 delete from leads L
 using (
   select id,
-         min(id) over (partition by lower(btrim(coalesce(name,''))), regexp_replace(coalesce(phone,''),'\D','','g')) as keep_id,
+         min(id::text) over (partition by lower(btrim(coalesce(name,''))), regexp_replace(coalesce(phone,''),'\D','','g')) as keep_id,
          regexp_replace(coalesce(phone,''),'\D','','g') as ph
   from leads
 ) k
-where L.id = k.id and k.id <> k.keep_id and length(k.ph) >= 7;
+where L.id = k.id and k.id::text <> k.keep_id and length(k.ph) >= 7;

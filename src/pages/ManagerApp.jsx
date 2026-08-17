@@ -788,6 +788,7 @@ function Leads() {
   const typed = leads.filter(l => (l.lead_type || 'customer') === leadType)
   const dead = l => l.status === 'lost'   // not interested / disconnected — sink to bottom
   let base = filter === 'all' ? typed : typed.filter(l => l.status === filter)
+  if (!canManage) base = base.filter(l => !l.reserved)   // employees never see reserved leads
   if (mine) base = base.filter(l => l.assigned_to === profile?.id)
   const shown = base.slice().sort((a, b) => (dead(a) ? 1 : 0) - (dead(b) ? 1 : 0))
   const mineCount = typed.filter(l => l.assigned_to === profile?.id).length
@@ -879,11 +880,15 @@ function Leads() {
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
-              <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{l.assigned_to
-                ? (l.assigned_to === profile?.id
+              <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{canManage
+                ? (l.reserved
+                    ? <button className="btn btn-sm" style={{ background: '#e9b949', color: '#2a1e00', fontWeight: 700 }} title="Release back to employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: false, assigned_to: null }) }}>Reserved ✕</button>
+                    : <><button className="btn btn-g btn-sm" title="Reserve — hide from employees" onClick={e => { e.stopPropagation(); upd(l.id, { reserved: true, assigned_to: profile?.id }) }}>Reserve</button>{l.assigned_to && <span style={{ color: 'var(--t3)', marginLeft: 4 }}>{nameOf(l.assigned_to) || ''}</span>}</>)
+                : (l.assigned_to === profile?.id
                     ? <button className="btn btn-g btn-sm" title="Release" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: null }) }}>★ You ✕</button>
-                    : <span style={{ color: 'var(--t3)' }}>{nameOf(l.assigned_to) || 'Assigned'}{canManage && <button className="btn btn-g btn-sm" style={{ marginLeft: 4 }} onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }} title="Take over">take</button>}</span>)
-                : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>}</td>
+                    : l.assigned_to
+                      ? <span style={{ color: 'var(--t3)' }}>{nameOf(l.assigned_to) || 'Claimed'}</span>
+                      : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>)}</td>
               <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
               <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
               </tr>
