@@ -56,7 +56,47 @@ const SCRIPTS_ES = {
     { h: 'Cierre', b: "Le propongo esto: una visita rápida de 10 minutos, le preparo una propuesta combinada que puede revisar y firmar en línea, y si no mejora lo que ya tiene, no pasa nada. ¿Le sirve mejor [day] por la mañana o por la tarde?" },
   ],
 }
-const SCRIPT_SETS = { en: SCRIPTS, es: SCRIPTS_ES }
+/* ── QUICK scripts — tight, straight-to-the-point for live calls ── */
+const SCRIPTS_QUICK = {
+  cleaner: [
+    { h: 'Voicemail', b: "Hi [Name], Fernando with Great Way Environmental in Stockton — commercial cleaning and landscaping. Not selling anything; I've got overflow work I'd rather hand to a good local owner. Call me at [number]." },
+    { h: 'Opener', b: "Hey [Name], Fernando with Great Way Environmental. Real quick — I'm not selling anything. I get more cleaning and landscaping work than my crews can cover and I sub it to solid local owners. That something you'd want?" },
+    { h: 'Value', b: "You do the work, we handle the client and billing, you get steady accounts. When you're slammed, you send us work too." },
+    { h: 'Qualify', b: "You the owner? … What areas do you cover? … Room for more work? … You carry a COI — general liability, plus workers' comp if you have employees?" },
+    { h: 'Objections', b: "\"How do you make money?\" → Small margin for managing the client.\n\"Already busy?\" → Perfect — you're my backup for overflow.\n\"Will I get paid?\" → We invoice the client, you invoice us, net terms in writing." },
+    { h: 'Close', b: "I'll add you to our sub list. Send me your COI and I'll text a one-page sub agreement. Cool?" },
+  ],
+  customer: [
+    { h: 'Opener', b: "Hi [Name], Fernando with Great Way Environmental. Quick one — most properties pay two vendors, one for cleaning and one for grounds. We do both under one contract: one crew, one invoice, one contact." },
+    { h: 'Value', b: "One number to call, no middleman between the cleaner and the landscaper." },
+    { h: 'Social proof', b: "We already handle G&C, Lexus, and Hilton nearby — we're in your area every week." },
+    { h: 'Qualify', b: "Who handles it now — in-house or contracted? … Happy with them? … When's your contract up?" },
+    { h: 'Objections', b: "\"Under contract.\" → When's renewal? I'll send a quick comparison.\n\"Just send pricing.\" → Every property's different — a 10-min walkthrough gets you a real number.\n\"How much?\" → That's exactly what the walkthrough's for." },
+    { h: 'Close', b: "Let's do a 10-minute walkthrough — I'll send a bundled proposal you can sign online. [day] morning or afternoon?" },
+  ],
+}
+const SCRIPTS_QUICK_ES = {
+  cleaner: [
+    { h: 'Buzón de voz', b: "Hola [Name], Fernando de Great Way Environmental en Stockton — limpieza comercial y jardinería. No es para venderle nada; tengo trabajo de sobra que prefiero pasarle a un buen dueño local. Llámeme al [number]." },
+    { h: 'Apertura', b: "¿Qué tal [Name]? Fernando de Great Way Environmental. Rápido — no le vendo nada. Me llega más trabajo de limpieza y jardinería del que cubro y se lo paso a dueños locales serios. ¿Le interesa?" },
+    { h: 'Valor', b: "Usted hace el trabajo, nosotros manejamos el cliente y la facturación, y usted consigue cuentas fijas. Cuando esté full, usted nos pasa trabajo también." },
+    { h: 'Calificar', b: "¿Es usted el dueño? … ¿Qué áreas cubre? … ¿Espacio para más trabajo? … ¿Tiene COI — responsabilidad general, y workers' comp si tiene empleados?" },
+    { h: 'Objeciones', b: "\"¿Cómo ganan?\" → Un margen pequeño por manejar al cliente.\n\"¿Ya ocupado?\" → Perfecto — usted es mi respaldo para el desborde.\n\"¿Me pagan?\" → Facturamos al cliente, usted nos factura, términos por escrito." },
+    { h: 'Cierre', b: "Lo agrego a la lista de subcontratistas. Mándeme su COI y le paso un acuerdo de una página por mensaje. ¿Le parece?" },
+  ],
+  customer: [
+    { h: 'Apertura', b: "Hola [Name], Fernando de Great Way Environmental. Rápido — casi todas las propiedades pagan dos proveedores, uno de limpieza y otro de jardinería. Nosotros hacemos ambos en un solo contrato: una cuadrilla, una factura, un contacto." },
+    { h: 'Valor', b: "Un solo número, sin intermediar entre el de limpieza y el de jardinería." },
+    { h: 'Prueba social', b: "Ya atendemos G&C, Lexus y Hilton cerca — estamos por su zona cada semana." },
+    { h: 'Calificar', b: "¿Quién lo maneja ahora — propio o contratado? … ¿Contento con ellos? … ¿Cuándo se vence su contrato?" },
+    { h: 'Objeciones', b: "\"Bajo contrato.\" → ¿Cuándo se vence? Le mando una comparación rápida.\n\"Mándeme precio.\" → Cada propiedad es distinta — una visita de 10 min le da un número real.\n\"¿Cuánto?\" → Para eso es justamente la visita." },
+    { h: 'Cierre', b: "Hagamos una visita de 10 minutos — le mando una propuesta combinada que firma en línea. ¿[day] por la mañana o por la tarde?" },
+  ],
+}
+const SCRIPT_SETS = {
+  full: { en: SCRIPTS, es: SCRIPTS_ES },
+  quick: { en: SCRIPTS_QUICK, es: SCRIPTS_QUICK_ES },
+}
 
 /* question wrapper — defined at module scope so inputs keep focus while typing */
 const Q = ({ prompt, children, opt }) => (
@@ -82,6 +122,7 @@ export function LogCall({ lead, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [showScript, setShowScript] = useState(true)
   const [lang, setLang] = useState('en')
+  const [len, setLen] = useState('quick')
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   const [searching, setSearching] = useState(false)
@@ -177,13 +218,15 @@ export function LogCall({ lead, onClose, onSaved }) {
           <div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8, flexWrap: 'wrap' }}>
-                <div className="sec-t">📖 {isCleaner ? 'Cleaner / Partner' : 'Customer'} Script — read aloud</div>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div className="sec-t">📖 {isCleaner ? 'Partner' : 'Bundle'} Script — read aloud</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {[['quick', 'Quick'], ['full', 'Full']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${len === v ? 'btn-p' : 'btn-g'}`} onClick={() => setLen(v)}>{lb}</button>)}
+                  <span style={{ width: 1, background: 'var(--bd2)', margin: '0 2px' }} />
                   {[['en', 'EN'], ['es', 'ES']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${lang === v ? 'btn-p' : 'btn-g'}`} onClick={() => setLang(v)}>{lb}</button>)}
                 </div>
               </div>
               <div className="card script-box" style={{ maxHeight: 340, overflowY: 'auto', background: 'rgba(74,158,255,.06)', border: '1px solid rgba(74,158,255,.22)' }}>
-                {SCRIPT_SETS[lang][isCleaner ? 'cleaner' : 'customer'].map((s, i) => (
+                {SCRIPT_SETS[len][lang][isCleaner ? 'cleaner' : 'customer'].map((s, i) => (
                   <div key={i} style={{ marginBottom: 10 }}>
                     <div className="sec-t" style={{ marginBottom: 3, color: 'var(--blue)' }}>{s.h}</div>
                     <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{s.b}</div>
