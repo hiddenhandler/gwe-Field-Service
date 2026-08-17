@@ -681,7 +681,7 @@ const CALL_SCRIPTS = [
       { h: 'Cierre', b: "Le propongo esto: una visita rápida de 10 minutos, le preparo una propuesta combinada que puede revisar y firmar en línea, y si no mejora lo que ya tiene, no pasa nada. ¿Le sirve mejor [day] por la mañana o por la tarde?" },
     ],
     sections_quick: [
-      { h: 'Opener', b: "Hi [Name], Fernando with Great Way Environmental — landscaping and cleaning. We usually save business owners money. Mind if I do a quick walkthrough of your property and get you a quote?" },
+      { h: 'Opener (yes/no)', b: "Hi — is this the owner? … Fernando with Great Way Environmental. We do commercial cleaning and landscaping, and we usually save owners money. Yes or no — worth a quick free walkthrough and quote?" },
       { h: 'Value (if they ask)', b: "Most properties pay two vendors — one for cleaning, one for grounds. We do both under one contract: one crew, one invoice, one number to call." },
       { h: 'Social proof', b: "We already handle G&C, Lexus, and Hilton nearby — we're in your area every week." },
       { h: 'Qualify', b: "Who handles it now — in-house or contracted? … Happy with them? … When's your contract up?" },
@@ -689,7 +689,7 @@ const CALL_SCRIPTS = [
       { h: 'Close', b: "Let's do a 10-minute walkthrough — I'll send a bundled proposal you can sign online. [day] morning or afternoon?" },
     ],
     sections_quick_es: [
-      { h: 'Apertura', b: "Hola [Name], Fernando de Great Way Environmental — jardinería y limpieza. Normalmente le ahorramos dinero a los dueños de negocios. ¿Le parece si hago una visita rápida a su propiedad y le doy una cotización?" },
+      { h: 'Apertura (sí/no)', b: "Hola — ¿hablo con el dueño? … Fernando de Great Way Environmental. Hacemos limpieza comercial y jardinería, y normalmente le ahorramos dinero a los dueños. Sí o no — ¿vale la pena una visita rápida y gratis con cotización?" },
       { h: 'Valor (si preguntan)', b: "Casi todas las propiedades pagan dos proveedores — uno de limpieza y otro de jardinería. Nosotros hacemos ambos en un solo contrato: una cuadrilla, una factura, un solo número." },
       { h: 'Prueba social', b: "Ya atendemos G&C, Lexus y Hilton cerca — estamos por su zona cada semana." },
       { h: 'Calificar', b: "¿Quién lo maneja ahora — propio o contratado? … ¿Contento con ellos? … ¿Cuándo se vence su contrato?" },
@@ -705,9 +705,17 @@ function Leads() {
   const [leads, setLeads] = useState([]), [busy, setBusy] = useState(true), [add, setAdd] = useState(false), [saving, setSaving] = useState(false), [filter, setFilter] = useState('all')
   const [scripts, setScripts] = useState(false), [scriptCopied, setScriptCopied] = useState(null), [callLead, setCallLead] = useState(null), [scriptLang, setScriptLang] = useState('en'), [scriptLen, setScriptLen] = useState('quick')
   const [leadType, setLeadType] = useState('customer')  // customer | cleaner
+  const [people, setPeople] = useState([]), [mine, setMine] = useState(false)
   const blank = { name: '', company: '', phone: '', email: '', source: '', notes: '' }
   const [f, setF] = useState(blank)
-  const load = async () => { const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false }); setLeads(data || []); setBusy(false) }
+  const load = async () => {
+    const [{ data: ld }, { data: pp }] = await Promise.all([
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('id, full_name'),
+    ])
+    setLeads(ld || []); setPeople(pp || []); setBusy(false)
+  }
+  const nameOf = id => people.find(p => p.id === id)?.full_name
   useEffect(() => { load() }, [])
   const save = async e => { e.preventDefault(); setSaving(true); await supabase.from('leads').insert({ ...f, status: 'new', lead_type: leadType }); setF(blank); setAdd(false); setSaving(false); load() }
   const upd = async (id, patch) => { await supabase.from('leads').update(patch).eq('id', id); load() }
@@ -779,7 +787,10 @@ function Leads() {
 
   const typed = leads.filter(l => (l.lead_type || 'customer') === leadType)
   const dead = l => l.status === 'lost'   // not interested / disconnected — sink to bottom
-  const shown = (filter === 'all' ? typed : typed.filter(l => l.status === filter)).slice().sort((a, b) => (dead(a) ? 1 : 0) - (dead(b) ? 1 : 0))
+  let base = filter === 'all' ? typed : typed.filter(l => l.status === filter)
+  if (mine) base = base.filter(l => l.assigned_to === profile?.id)
+  const shown = base.slice().sort((a, b) => (dead(a) ? 1 : 0) - (dead(b) ? 1 : 0))
+  const mineCount = typed.filter(l => l.assigned_to === profile?.id).length
   const dupLead = (add && f.phone && norm(f.phone).length >= 7) ? leads.find(l => norm(l.phone) === norm(f.phone)) : null
   const counts = LEAD_STATUS.reduce((a, s) => ({ ...a, [s]: typed.filter(l => l.status === s).length }), {})
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -840,10 +851,12 @@ function Leads() {
           <button key={v} className={`btn btn-sm ${leadType === v ? 'btn-p' : 'btn-g'}`} style={{ flex: 1, minWidth: 90 }} onClick={() => { setLeadType(v); setSel(null); setFilter('all') }}>{lb} ({leads.filter(l => (l.lead_type || 'customer') === v).length})</button>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
         {['all', ...LEAD_STATUS].map(s => (
           <button key={s} className={`btn btn-sm ${filter === s ? 'btn-p' : 'btn-g'}`} onClick={() => setFilter(s)}>{cap(s)}{s !== 'all' ? ` (${counts[s] || 0})` : ''}</button>
         ))}
+        <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--bd2)', margin: '0 2px' }} />
+        <button className={`btn btn-sm ${mine ? 'btn-p' : 'btn-g'}`} onClick={() => setMine(m => !m)}>★ My leads ({mineCount})</button>
       </div>
       {add && <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 14 }}>New Lead</div>
@@ -859,17 +872,22 @@ function Leads() {
       </div>}
       <div className="card card-f">
         {busy ? <div className="loader"><div className="spin spin-lg" /></div> : shown.length === 0 ? <div className="empty"><Phone size={24} /><p>No leads{filter !== 'all' ? ` (${filter})` : ''}</p></div> :
-          <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Notes</th><th></th></tr></thead><tbody>
+          <div className="tw"><table><thead><tr><th>Lead</th><th>Contact</th><th>Status</th><th>Callback</th><th>Owner</th><th>Notes</th><th></th></tr></thead><tbody>
             {shown.map(l => { const isOpen = sel?.id === l.id; return <Fragment key={l.id}>
               <tr style={{ ...(dueSoon(l) ? { background: 'rgba(212,160,23,.06)' } : {}), ...(dead(l) ? { opacity: 0.5 } : {}), ...(isOpen ? { background: 'var(--bg-h)' } : {}) }}>
               <td><button type="button" onClick={() => isOpen ? setSel(null) : openLead(l)} style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}><ChevronDown size={13} style={{ color: 'var(--t3)', flexShrink: 0, transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .12s' }} /><span><span style={{ fontWeight: 600, color: 'var(--g-light)', display: 'block' }}>{l.name}</span><span style={{ fontSize: 11, color: 'var(--t3)' }}>{l.company}{l.source ? ` · ${l.source}` : ''}</span></span></button></td>
               <td style={{ fontSize: 12 }}>{l.phone && <div><a href={`tel:${l.phone}`} style={{ color: 'var(--g-light)' }}>{l.phone}</a></div>}{l.email && <div style={{ color: 'var(--t3)' }}>{l.email}</div>}</td>
               <td><select className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.status} onChange={e => upd(l.id, { status: e.target.value })}>{LEAD_STATUS.map(s => <option key={s} value={s}>{cap(s)}</option>)}</select></td>
               <td><input type="date" className="inp" style={{ padding: '3px 6px', fontSize: 12, width: 'auto' }} value={l.callback_date || ''} onChange={e => upd(l.id, { callback_date: e.target.value || null })} />{dueSoon(l) && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 2 }}>due</div>}</td>
+              <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{l.assigned_to
+                ? (l.assigned_to === profile?.id
+                    ? <button className="btn btn-g btn-sm" title="Release" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: null }) }}>★ You ✕</button>
+                    : <span style={{ color: 'var(--t3)' }}>{nameOf(l.assigned_to) || 'Assigned'}{canManage && <button className="btn btn-g btn-sm" style={{ marginLeft: 4 }} onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }} title="Take over">take</button>}</span>)
+                : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>}</td>
               <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
               <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
               </tr>
-              {isOpen && <tr><td colSpan={6} style={{ padding: '0 8px 10px' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></td></tr>}
+              {isOpen && <tr><td colSpan={7} style={{ padding: '0 8px 10px' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></td></tr>}
             </Fragment> })}
           </tbody></table></div>}
       </div>

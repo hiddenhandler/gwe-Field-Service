@@ -67,7 +67,7 @@ const SCRIPTS_QUICK = {
     { h: 'Close', b: "I'll add you to our sub list. Send me your COI and I'll text a one-page sub agreement. Cool?" },
   ],
   customer: [
-    { h: 'Opener', b: "Hi [Name], Fernando with Great Way Environmental — landscaping and cleaning. We usually save business owners money. Mind if I do a quick walkthrough of your property and get you a quote?" },
+    { h: 'Opener (yes/no)', b: "Hi — is this the owner? … Fernando with Great Way Environmental. We do commercial cleaning and landscaping, and we usually save owners money. Yes or no — worth a quick free walkthrough and quote?" },
     { h: 'Value (if they ask)', b: "Most properties pay two vendors — one for cleaning, one for grounds. We do both under one contract: one crew, one invoice, one number to call." },
     { h: 'Social proof', b: "We already handle G&C, Lexus, and Hilton nearby — we're in your area every week." },
     { h: 'Qualify', b: "Who handles it now — in-house or contracted? … Happy with them? … When's your contract up?" },
@@ -85,7 +85,7 @@ const SCRIPTS_QUICK_ES = {
     { h: 'Cierre', b: "Lo agrego a la lista de subcontratistas. Mándeme su COI y le paso un acuerdo de una página por mensaje. ¿Le parece?" },
   ],
   customer: [
-    { h: 'Apertura', b: "Hola [Name], Fernando de Great Way Environmental — jardinería y limpieza. Normalmente le ahorramos dinero a los dueños de negocios. ¿Le parece si hago una visita rápida a su propiedad y le doy una cotización?" },
+    { h: 'Apertura (sí/no)', b: "Hola — ¿hablo con el dueño? … Fernando de Great Way Environmental. Hacemos limpieza comercial y jardinería, y normalmente le ahorramos dinero a los dueños. Sí o no — ¿vale la pena una visita rápida y gratis con cotización?" },
     { h: 'Valor (si preguntan)', b: "Casi todas las propiedades pagan dos proveedores — uno de limpieza y otro de jardinería. Nosotros hacemos ambos en un solo contrato: una cuadrilla, una factura, un solo número." },
     { h: 'Prueba social', b: "Ya atendemos G&C, Lexus y Hilton cerca — estamos por su zona cada semana." },
     { h: 'Calificar', b: "¿Quién lo maneja ahora — propio o contratado? … ¿Contento con ellos? … ¿Cuándo se vence su contrato?" },
