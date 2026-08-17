@@ -44,12 +44,24 @@ export function ClockWidget({ onPunch, compact }) {
   }, [profile?.id])
   useEffect(() => { load() }, [load])
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i) }, [])
+  // keep every clock widget (sidebar + page) in sync: on another widget's punch, on refocus, and every 20s
+  useEffect(() => {
+    const reload = () => load()
+    const onVis = () => { if (!document.hidden) load() }
+    window.addEventListener('gwe-punch', reload)
+    window.addEventListener('focus', reload)
+    document.addEventListener('visibilitychange', onVis)
+    const poll = setInterval(load, 20000)
+    return () => { window.removeEventListener('gwe-punch', reload); window.removeEventListener('focus', reload); document.removeEventListener('visibilitychange', onVis); clearInterval(poll) }
+  }, [load])
 
   const st = reduce(punches, now)
   const punch = async (kind) => {
     setBusy(true)
     await supabase.from('time_punches').insert({ kind })   // user_id defaults to auth.uid()
-    await load(); setBusy(false); onPunch && onPunch()
+    await load(); setBusy(false)
+    window.dispatchEvent(new Event('gwe-punch'))   // sync the other clock widgets instantly
+    onPunch && onPunch()
   }
 
   const big = st.status === 'break' ? st.breakElapsed : st.status === 'working' ? st.shiftMs : st.workedMs
