@@ -166,7 +166,37 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg-
 .remember-row input{width:20px;height:20px;flex-shrink:0;accent-color:var(--g);cursor:pointer}
 
 @media(max-width:768px){
-  .side{display:none}.tabs{display:flex}.pg{padding:14px 12px 76px}
+  .side{display:none}.tabs{display:flex}.pg{padding:14px 12px 80px}
   .stats{grid-template-columns:1fr 1fr}.hm{display:none!important}.fg2{grid-template-columns:1fr}
   .login-box{padding:28px 20px}
+
+  /* inputs at 16px so iOS doesn't zoom the page on focus */
+  .inp{font-size:16px}
+
+  /* full-screen modals on phones — easier to fill long forms like Log Call */
+  .modal-ov{padding:0;align-items:stretch}
+  .modal-card{max-width:100%;min-height:100dvh;border-radius:0;border:none;padding:16px 14px calc(20px + env(safe-area-inset-bottom))}
+
+  /* tighter tables + smooth horizontal scroll */
+  .tw{-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .tw table{min-width:640px}
+  thead th{padding:8px 10px;font-size:10px}
+  tbody td{padding:10px;font-size:12px}
+  .card{padding:16px}
+
+  /* bottom nav: scroll horizontally when there are many items */
+  .tabs{overflow-x:auto;justify-content:flex-start;flex-wrap:nowrap}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs{scrollbar-width:none}
+  .tabs button{flex:0 0 auto;min-width:64px}
+
+  /* headings a touch smaller so headers + action buttons fit one row */
+  .pg h1{font-size:20px!important}
+
+  /* keep the read-aloud script from eating the screen on the Log Call form */
+  .script-box{max-height:200px!important}
+}
+@media(max-width:420px){
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .pg{padding:12px 10px 82px}
 }

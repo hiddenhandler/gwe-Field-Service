@@ -182,7 +182,7 @@ export function LogCall({ lead, onClose, onSaved }) {
                   {[['en', 'EN'], ['es', 'ES']].map(([v, lb]) => <button key={v} type="button" className={`btn btn-sm ${lang === v ? 'btn-p' : 'btn-g'}`} onClick={() => setLang(v)}>{lb}</button>)}
                 </div>
               </div>
-              <div className="card" style={{ maxHeight: 340, overflowY: 'auto', background: 'rgba(74,158,255,.06)', border: '1px solid rgba(74,158,255,.22)' }}>
+              <div className="card script-box" style={{ maxHeight: 340, overflowY: 'auto', background: 'rgba(74,158,255,.06)', border: '1px solid rgba(74,158,255,.22)' }}>
                 {SCRIPT_SETS[lang][isCleaner ? 'cleaner' : 'customer'].map((s, i) => (
                   <div key={i} style={{ marginBottom: 10 }}>
                     <div className="sec-t" style={{ marginBottom: 3, color: 'var(--blue)' }}>{s.h}</div>
