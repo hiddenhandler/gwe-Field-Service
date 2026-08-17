@@ -889,10 +889,10 @@ function Leads() {
                     : l.assigned_to
                       ? <span style={{ color: 'var(--t3)' }}>{nameOf(l.assigned_to) || 'Claimed'}</span>
                       : <button className="btn btn-p btn-sm" onClick={e => { e.stopPropagation(); upd(l.id, { assigned_to: profile?.id }) }}>Claim</button>)}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)', maxWidth: 200 }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}{l.notes}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{['cleaner', 'landscaper'].includes(leadType) && <span className={`bdg ${subCompliant(l) ? 'bdg-g' : 'bdg-x'}`} style={{ marginRight: 6, fontSize: 9 }}>{subCompliant(l) ? '✓ DOCS' : 'DOCS'}</span>}<span style={{ display: 'inline-block', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }} title={l.notes}>{l.notes}</span></td>
               <td>{canManage && <button className="btn btn-d btn-sm" onClick={() => del(l.id)} title="Delete lead"><X size={11} /></button>}</td>
               </tr>
-              {isOpen && <tr><td colSpan={7} style={{ padding: '0 8px 10px' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></td></tr>}
+              {isOpen && <tr><td colSpan={7} style={{ padding: '0 8px 10px' }}><div style={{ position: 'sticky', left: 8, width: 'min(100%, 980px)' }}><LeadDetail sel={sel} cf={cf} setCf={setCf} saveCf={saveCf} savingCf={savingCf} convertToCrew={convertToCrew} converting={converting} crewMsg={crewMsg} canManage={canManage} todayStr={todayStr} createProposal={createProposal} creating={creating} convertToCustomer={convertToCustomer} props_={props_} propLink={propLink} copyLink={copyLink} copied={copied} emailLink={emailLink} delProp={delProp} setCallLead={setCallLead} setSel={setSel} /></div></td></tr>}
             </Fragment> })}
           </tbody></table></div>}
       </div>
